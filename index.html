@@ -1,0 +1,3273 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cntt.5TL - Tạo Chữ Ký Số</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;500;600;700&family=Great+Vibes&family=Allura&family=Alex+Brush&family=Caveat:wght@400;500;600;700&family=Satisfy&family=Pacifico&family=Lobster&family=Sacramento&family=Parisienne&family=Yellowtail&family=Kaushan+Script&family=Italianno&family=Homemade+Apple&family=Marck+Script&family=Petit+Formal+Script&family=Mrs+Saint+Delafield&family=Herr+Von+Muellerhoff&family=Birthstone&family=Whisper&family=Mr+Dafoe&family=Shadows+Into+Light&family=La+Belle+Aurore&family=Qwigley&family=Rouge+Script&family=Grand+Hotel&family=Zeyada&family=WindSong&family=Meddon&family=Kalam:wght@400;700&family=Miss+Fajardose&family=Sassy+Frass&family=Playball&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
+    <!-- camera.js: Web Component <camera-scanner> để chụp trực tiếp chữ ký, đặt cùng thư mục với file HTML này.
+         Nếu thiếu file, thẻ script chỉ lỗi 404 âm thầm - app vẫn chạy bình thường, nút "Chụp Trực Tiếp"
+         sẽ tự báo cho người dùng biết thay vì làm hỏng trang. -->
+    <script>
+    /* ===== camera.js (nhúng trực tiếp, không cần file rời) =====
+       Nhúng inline để chạy được cả khi mở qua content:// (bấm mở từ Trình quản lý tệp /
+       Thư viện ảnh trên Android) - kiểu mở này không đọc được file .js rời cùng thư mục. */
+/**
+ * camera.js — <camera-scanner> Web Component
+ * Phiên bản: 1.0.0
+ * Tương thích: Chrome Android, Safari iOS, Samsung Internet, file://, https://
+ *
+ * Cách dùng:
+ *   <script src="camera.js"><\/script>
+ *   <camera-scanner frame="square" ui="true" output="base64"></camera-scanner>
+ *
+ * Tài liệu đầy đủ: xem CAMERA_CONTEXT.md
+ */
+
+(function () {
+  'use strict';
+
+  // ─────────────────────────────────────────────────────────────
+  // HẰNG SỐ
+  // ─────────────────────────────────────────────────────────────
+  const FRAMES = {
+    square : { label: 'Vuông',              w: 80, h: 80,   r: 12,  ar: null  },
+    card   : { label: 'Thẻ ngang',          w: 88, h: 56,   r: 10,  ar: 1.586 },
+    a4     : { label: 'Tài liệu A4',        w: 70, h: 90,   r: 8,   ar: 0.707 },
+    oval   : { label: 'Oval khuôn mặt',     w: 72, h: 88,   r: 50,  ar: null  },
+    circle : { label: 'Tròn dấu mộc',       w: 75, h: 75,   r: 50,  ar: 1     },
+    none   : { label: 'Không khung',        w: 0,  h: 0,    r: 0,   ar: null  },
+  };
+
+  const HINTS = {
+    square : 'Hướng camera vào đối tượng',
+    card   : 'Đặt thẻ vào khung, giữ thẳng',
+    a4     : 'Giữ tài liệu phẳng trong khung',
+    oval   : 'Nhìn thẳng vào camera',
+    circle : 'Đặt dấu mộc vào vòng tròn',
+    none   : '',
+  };
+
+  const ERROR_MESSAGES = {
+    NotAllowedError         : { code: 'PERMISSION_DENIED', msg: 'Bạn chưa cấp quyền camera. Vào Cài đặt trình duyệt để cấp lại.', recoverable: false },
+    PermissionDeniedError   : { code: 'PERMISSION_DENIED', msg: 'Bạn chưa cấp quyền camera. Vào Cài đặt trình duyệt để cấp lại.', recoverable: false },
+    NotFoundError           : { code: 'NOT_FOUND',         msg: 'Không tìm thấy camera trên thiết bị này.',                       recoverable: false },
+    DevicesNotFoundError    : { code: 'NOT_FOUND',         msg: 'Không tìm thấy camera trên thiết bị này.',                       recoverable: false },
+    NotReadableError        : { code: 'IN_USE',            msg: 'Camera đang được dùng bởi ứng dụng khác. Đóng app đó rồi thử lại.', recoverable: true },
+    AbortError              : { code: 'IN_USE',            msg: 'Camera đang được dùng bởi ứng dụng khác.',                       recoverable: true },
+    NotSupportedError       : { code: 'NOT_SUPPORTED',     msg: 'Trình duyệt không hỗ trợ camera. Vui lòng dùng Chrome hoặc Safari.', recoverable: false },
+    SecurityError           : { code: 'HTTPS_REQUIRED',    msg: 'Camera cần HTTPS hoặc file://. Liên hệ người cung cấp link.',    recoverable: false },
+    OverconstrainedError    : { code: 'CONSTRAINT_ERROR',  msg: 'Camera không đáp ứng yêu cầu, đang thử lại...',                 recoverable: true },
+    ConstraintNotSatisfiedError: { code: 'CONSTRAINT_ERROR', msg: 'Camera không đáp ứng yêu cầu, đang thử lại...',               recoverable: true },
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // DETECT IN-APP BROWSER
+  // ─────────────────────────────────────────────────────────────
+  function isInAppBrowser() {
+    const ua = navigator.userAgent || '';
+    return /FBAN|FBAV|Instagram|ZaloApp|Line\/|KAKAOTALK|MicroMessenger/i.test(ua);
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // SHARPNESS — Laplacian Variance (không cần thư viện ngoài)
+  // ─────────────────────────────────────────────────────────────
+  function measureSharpness(canvas, x, y, w, h) {
+    // Lấy vùng sample (tối đa 200×200 để tính nhanh)
+    const sw = Math.min(w, 200);
+    const sh = Math.min(h, 200);
+    const sx = x + (w - sw) / 2;
+    const sy = y + (h - sh) / 2;
+
+    const tmp = document.createElement('canvas');
+    tmp.width = sw; tmp.height = sh;
+    const ctx = tmp.getContext('2d');
+    ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+    const data = ctx.getImageData(0, 0, sw, sh).data;
+    const len  = sw * sh;
+
+    // Chuyển sang grayscale
+    const gray = new Float32Array(len);
+    for (let i = 0; i < len; i++) {
+      gray[i] = 0.299 * data[i*4] + 0.587 * data[i*4+1] + 0.114 * data[i*4+2];
+    }
+
+    // Laplacian kernel: [0,1,0,1,-4,1,0,1,0]
+    let sum = 0, count = 0;
+    for (let row = 1; row < sh - 1; row++) {
+      for (let col = 1; col < sw - 1; col++) {
+        const idx = row * sw + col;
+        const lap = -4 * gray[idx]
+          + gray[idx - 1] + gray[idx + 1]
+          + gray[idx - sw] + gray[idx + sw];
+        sum += lap * lap;
+        count++;
+      }
+    }
+
+    const variance = count > 0 ? sum / count : 0;
+    // Normalize: variance ~0–8000 → 0–100
+    return Math.min(100, Math.round(Math.sqrt(variance) * 1.8));
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // IMAGE PROCESSING
+  // ─────────────────────────────────────────────────────────────
+  function processCanvas(srcCanvas, opts) {
+    // opts: { cropX, cropY, cropW, cropH, maxWidth, quality, grayscale, output }
+    let { cropX, cropY, cropW, cropH, maxWidth, quality, grayscale, output } = opts;
+
+    // Scale down nếu cần
+    const scale = cropW > maxWidth ? maxWidth / cropW : 1;
+    const outW  = Math.round(cropW * scale);
+    const outH  = Math.round(cropH * scale);
+
+    const out = document.createElement('canvas');
+    out.width = outW; out.height = outH;
+    const ctx = out.getContext('2d');
+    ctx.drawImage(srcCanvas, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
+
+    if (grayscale) {
+      const img = ctx.getImageData(0, 0, outW, outH);
+      const d   = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const g = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+        d[i] = d[i+1] = d[i+2] = g;
+      }
+      ctx.putImageData(img, 0, 0);
+    }
+
+    const dataUrl = out.toDataURL('image/jpeg', quality);
+    const blob    = (output === 'blob' || output === 'both')
+      ? dataURLtoBlob(dataUrl) : null;
+
+    return { dataUrl: (output !== 'blob') ? dataUrl : null, blob, width: outW, height: outH };
+  }
+
+  function dataURLtoBlob(dataUrl) {
+    const [header, data] = dataUrl.split(',');
+    const mime  = header.match(/:(.*?);/)[1];
+    const bytes = atob(data);
+    const arr   = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // SHADOW DOM STYLES
+  // ─────────────────────────────────────────────────────────────
+  const STYLE = `
+    :host {
+      display: block;
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    canvas { display: none; }
+
+    /* ── Overlay ── */
+    #overlay {
+      position: absolute; inset: 0;
+      pointer-events: none;
+    }
+
+    /* ── Khung quét ── */
+    #frame-box {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      border: 2px solid var(--frame-color, #f0a500);
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.48);
+      transition: width .3s, height .3s, border-radius .3s;
+    }
+
+    #frame-box.frame-none {
+      border: none;
+      box-shadow: none;
+    }
+
+    /* Lưới mờ bên trong khung */
+    #frame-box.show-grid::before,
+    #frame-box.show-grid::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    #frame-box.show-grid::before {
+      background-image:
+        linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px);
+      background-size: 33.33% 33.33%;
+    }
+
+    /* ── 4 góc trang trí ── */
+    .corner {
+      position: absolute;
+      width: 22px; height: 22px;
+      border-color: var(--frame-color, #f0a500);
+      border-style: solid;
+      opacity: .9;
+    }
+    .corner.tl { top:-2px; left:-2px;   border-width:3px 0 0 3px; border-radius:8px 0 0 0; }
+    .corner.tr { top:-2px; right:-2px;  border-width:3px 3px 0 0; border-radius:0 8px 0 0; }
+    .corner.bl { bottom:-2px; left:-2px;  border-width:0 0 3px 3px; border-radius:0 0 0 8px; }
+    .corner.br { bottom:-2px; right:-2px; border-width:0 3px 3px 0; border-radius:0 0 8px 0; }
+
+    /* Ẩn góc khi frame=oval/circle */
+    :host([frame="oval"]) .corner,
+    :host([frame="circle"]) .corner { display: none; }
+
+    /* ── Đường quét ── */
+    #scan-line {
+      position: absolute; left: 4%; right: 4%; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--frame-color, #f0a500), transparent);
+      top: 5%; opacity: 0;
+    }
+    #scan-line.active { animation: scanMove 2.2s ease-in-out infinite; }
+    @keyframes scanMove {
+      0%  { top: 5%;  opacity: 0 }
+      8%  { opacity: 1 }
+      92% { opacity: 1 }
+      100%{ top: 93%; opacity: 0 }
+    }
+
+    /* ── Hint text ── */
+    #hint {
+      position: absolute;
+      bottom: 10px; left: 0; right: 0;
+      text-align: center;
+      font-size: 12px; color: rgba(255,255,255,.82);
+      text-shadow: 0 1px 5px #000;
+      padding: 0 16px;
+    }
+
+    /* ── Thanh sharpness ── */
+    #sharpness-wrap {
+      position: absolute;
+      top: 12px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,.6);
+      border-radius: 20px;
+      padding: 5px 12px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      backdrop-filter: blur(4px);
+    }
+    #sharpness-wrap.visible { display: flex; }
+    #sharpness-label { font-size: 11px; color: rgba(255,255,255,.75); }
+    #sharpness-track {
+      width: 80px; height: 6px;
+      background: rgba(255,255,255,.2);
+      border-radius: 3px; overflow: hidden;
+    }
+    #sharpness-fill {
+      height: 100%;
+      background: #2ecc71;
+      border-radius: 3px;
+      width: 0%;
+      transition: width .2s, background .2s;
+    }
+    #sharpness-fill.low    { background: #e74c3c; }
+    #sharpness-fill.medium { background: #f39c12; }
+    #sharpness-fill.high   { background: #2ecc71; }
+    #sharpness-pct { font-size: 11px; color: #fff; font-weight: 600; width: 28px; }
+
+    /* ── Zoom indicator ── */
+    #zoom-indicator {
+      position: absolute;
+      top: 12px; right: 14px;
+      background: rgba(0,0,0,.6);
+      color: #fff; font-size: 12px; font-weight: 700;
+      padding: 4px 10px; border-radius: 12px;
+      display: none;
+      backdrop-filter: blur(4px);
+    }
+    #zoom-indicator.visible { display: block; }
+
+    /* ── In-app browser warning ── */
+    #inapp-warn {
+      position: absolute; inset: 0;
+      background: #111;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 24px;
+      text-align: center;
+      color: #fff;
+    }
+    #inapp-warn.visible { display: flex; }
+    #inapp-warn .ico { font-size: 52px; margin-bottom: 16px; }
+    #inapp-warn h2   { font-size: 18px; margin-bottom: 10px; }
+    #inapp-warn p    { font-size: 13px; color: #aaa; line-height: 1.6; }
+
+    /* ── Error overlay ── */
+    #error-overlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,.85);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      color: #fff;
+    }
+    #error-overlay.visible { display: flex; }
+    #error-overlay .err-ico { font-size: 40px; margin-bottom: 12px; }
+    #error-overlay .err-msg { font-size: 13px; color: #ddd; line-height: 1.6; margin-bottom: 16px; }
+    #error-overlay button {
+      padding: 10px 24px; border: none; border-radius: 10px;
+      background: #e74c3c; color: #fff;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+
+    /* ── UI Controls ── */
+    #controls {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: 0 20px calc(env(safe-area-inset-bottom, 0px) + 20px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      pointer-events: all;
+    }
+    #controls.hidden { display: none; }
+
+    .ctrl-btn {
+      background: rgba(30,30,30,.85);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 50%;
+      color: #fff;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .1s, opacity .1s;
+      backdrop-filter: blur(6px);
+      flex-shrink: 0;
+    }
+    .ctrl-btn:active { transform: scale(.9); opacity: .75; }
+    .ctrl-btn.hidden { display: none !important; }
+
+    #btn-flip    { width: 48px; height: 48px; font-size: 18px; }
+    #btn-capture {
+      width: 70px; height: 70px; font-size: 26px;
+      background: rgba(220,50,50,.9);
+      border: 3px solid rgba(255,255,255,.5);
+      border-radius: 50%;
+    }
+    #btn-zoom-out { width: 40px; height: 40px; font-size: 16px; }
+    #btn-zoom-in  { width: 40px; height: 40px; font-size: 16px; }
+    #btn-torch    { width: 48px; height: 48px; font-size: 18px; }
+    #btn-torch.on { background: rgba(255,200,0,.85); color: #333; }
+
+    /* ── Auto-capture countdown ring ── */
+    #capture-ring {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80px; height: 80px;
+      pointer-events: none;
+      display: none;
+    }
+    #capture-ring.visible { display: block; }
+    #capture-ring circle {
+      fill: none;
+      stroke: #2ecc71;
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-dasharray: 220;
+      stroke-dashoffset: 220;
+      transition: stroke-dashoffset .8s linear;
+      transform-origin: center;
+      transform: rotate(-90deg);
+    }
+  `;
+
+  // ─────────────────────────────────────────────────────────────
+  // HTML TEMPLATE
+  // ─────────────────────────────────────────────────────────────
+  const TEMPLATE = `
+    <style>${STYLE}</style>
+
+    <video autoplay playsinline muted></video>
+    <canvas></canvas>
+
+    <div id="overlay">
+      <div id="frame-box">
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner bl"></div>
+        <div class="corner br"></div>
+        <div id="scan-line"></div>
+        <svg id="capture-ring" viewBox="0 0 80 80">
+          <circle cx="40" cy="40" r="35"/>
+        </svg>
+      </div>
+      <div id="sharpness-wrap">
+        <span id="sharpness-label">Độ nét</span>
+        <div id="sharpness-track"><div id="sharpness-fill"></div></div>
+        <span id="sharpness-pct">0%</span>
+      </div>
+      <div id="zoom-indicator">1.0×</div>
+      <div id="hint"></div>
+    </div>
+
+    <div id="controls">
+      <button class="ctrl-btn" id="btn-torch"    title="Đèn flash">🔦</button>
+      <button class="ctrl-btn" id="btn-zoom-out" title="Thu nhỏ">－</button>
+      <button class="ctrl-btn" id="btn-capture"  title="Chụp">⬤</button>
+      <button class="ctrl-btn" id="btn-zoom-in"  title="Phóng to">＋</button>
+      <button class="ctrl-btn" id="btn-flip"     title="Đổi camera">🔄</button>
+    </div>
+
+    <div id="inapp-warn">
+      <div class="ico">⚠️</div>
+      <h2>Mở bằng Chrome hoặc Safari</h2>
+      <p>Trình duyệt trong ứng dụng không hỗ trợ camera.<br>
+         Nhấn ⋯ (hoặc ···) → <strong>Mở bằng trình duyệt</strong></p>
+    </div>
+
+    <div id="error-overlay">
+      <div class="err-ico">📷</div>
+      <div class="err-msg"></div>
+      <button id="btn-retry">Thử lại</button>
+    </div>
+  `;
+
+  // ─────────────────────────────────────────────────────────────
+  // WEB COMPONENT
+  // ─────────────────────────────────────────────────────────────
+  class CameraScanner extends HTMLElement {
+
+    // Attributes được theo dõi để tự cập nhật khi thay đổi
+    static get observedAttributes() {
+      return [
+        'frame', 'frame-color', 'frame-size', 'show-grid', 'show-guide',
+        'ui', 'hide-controls', 'auto-capture', 'sharpness-threshold',
+        'sharpness-bar', 'output', 'max-width', 'quality', 'grayscale',
+        'crop-to-frame', 'facing', 'hint', 'continuous', 'continuous-interval',
+      ];
+    }
+
+    constructor() {
+      super();
+      this._root    = this.attachShadow({ mode: 'open' });
+      this._root.innerHTML = TEMPLATE;
+
+      // ── Internal state ──
+      this._stream      = null;
+      this._zoom        = 1.0;
+      this._torchOn     = false;
+      this._busy        = false;
+      this._autoTimer   = null;
+      this._sharpTimer  = null;
+      this._autoConfirm = 0;   // bộ đếm frame liên tiếp đủ nét
+      this._track       = null; // MediaStreamTrack (để zoom/torch)
+
+      // ── Public callbacks ──
+      this.onResult    = null;
+      this.onReady     = null;
+      this.onError     = null;
+      this.onSharpness = null;
+
+      // ── Bind methods ──
+      this._onVisibility = this._onVisibility.bind(this);
+      this._onFreeze     = this._onFreeze.bind(this);
+      this._onResume     = this._onResume.bind(this);
+    }
+
+    // ── Helpers: lấy element trong shadow ──
+    _q(sel) { return this._root.querySelector(sel); }
+
+    // ── Helpers: đọc attribute với giá trị mặc định ──
+    _attr(name, def) {
+      const v = this.getAttribute(name);
+      return v === null ? def : v;
+    }
+    _bool(name, def = false) {
+      const v = this.getAttribute(name);
+      if (v === null) return def;
+      return v !== 'false';
+    }
+    _num(name, def) {
+      const v = parseFloat(this.getAttribute(name));
+      return isNaN(v) ? def : v;
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // LIFECYCLE CALLBACKS
+    // ─────────────────────────────────────────────────────────
+    connectedCallback() {
+      this._setupEvents();
+      this._applyFrame();
+      this._applyUI();
+
+      // Tự khởi động camera khi gắn vào DOM
+      if (!isInAppBrowser()) {
+        this.start();
+      } else {
+        this._q('#inapp-warn').classList.add('visible');
+      }
+    }
+
+    disconnectedCallback() {
+      // Dọn dẹp khi component bị xoá khỏi DOM
+      this.stop();
+      document.removeEventListener('visibilitychange', this._onVisibility);
+      document.removeEventListener('freeze',           this._onFreeze);
+      document.removeEventListener('resume',           this._onResume);
+    }
+
+    attributeChangedCallback(name) {
+      // Tự cập nhật khi attribute thay đổi lúc runtime
+      if (!this._root) return;
+      if (['frame','frame-color','frame-size','show-grid','show-guide'].includes(name)) {
+        this._applyFrame();
+      }
+      if (['ui','hide-controls'].includes(name)) {
+        this._applyUI();
+      }
+      if (name === 'hint') {
+        this._q('#hint').textContent = this._attr('hint', HINTS[this._attr('frame','square')] || '');
+      }
+      if (name === 'facing') {
+        if (this._stream) this.start(); // Restart với facing mới
+      }
+      if (name === 'sharpness-bar') {
+        this._q('#sharpness-wrap').classList.toggle('visible', this._bool('sharpness-bar'));
+      }
+      if (name === 'continuous' || name === 'continuous-interval') {
+        if (this._bool('continuous')) this.startContinuous();
+        else this.stopContinuous();
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // SETUP EVENTS
+    // ─────────────────────────────────────────────────────────
+    _setupEvents() {
+      // Nút điều khiển
+      this._q('#btn-capture').addEventListener('click',  () => this.capture());
+      this._q('#btn-flip')   .addEventListener('click',  () => this.flip());
+      this._q('#btn-zoom-in').addEventListener('click',  () => this.zoomIn());
+      this._q('#btn-zoom-out').addEventListener('click', () => this.zoomOut());
+      this._q('#btn-torch')  .addEventListener('click',  () => this.torch(!this._torchOn));
+      this._q('#btn-retry')  .addEventListener('click',  () => {
+        this._q('#error-overlay').classList.remove('visible');
+        this.start();
+      });
+
+      // Pinch-to-zoom
+      this._setupPinch();
+
+      // Visibility / lifecycle
+      document.addEventListener('visibilitychange', this._onVisibility);
+      document.addEventListener('freeze',           this._onFreeze);
+      document.addEventListener('resume',           this._onResume);
+    }
+
+    _setupPinch() {
+      let dist0 = 0, zoom0 = 1;
+      const vid = this._q('video');
+      vid.addEventListener('touchstart', e => {
+        if (e.touches.length === 2) {
+          dist0 = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          zoom0 = this._zoom;
+        }
+      }, { passive: true });
+      vid.addEventListener('touchmove', e => {
+        if (e.touches.length === 2) {
+          const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          this.setZoom(zoom0 * dist / dist0);
+        }
+      }, { passive: true });
+    }
+
+    _onVisibility() {
+      if (document.visibilityState === 'hidden') {
+        this.stopContinuous();
+        this._stopSharpnessLoop();
+      } else {
+        // Kiểm tra stream còn sống không
+        const ended = !this._stream ||
+          this._stream.getTracks().some(t => t.readyState === 'ended');
+        if (ended) {
+          this.start();
+        } else {
+          if (this._bool('continuous'))   this.startContinuous();
+          if (this._bool('auto-capture')) this._startSharpnessLoop();
+          if (this._bool('sharpness-bar'))this._startSharpnessLoop();
+        }
+      }
+    }
+    _onFreeze() { this.stopContinuous(); this._stopSharpnessLoop(); }
+    _onResume() {
+      if (this._bool('continuous'))    this.startContinuous();
+      if (this._bool('auto-capture'))  this._startSharpnessLoop();
+      if (this._bool('sharpness-bar')) this._startSharpnessLoop();
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // APPLY FRAME OVERLAY
+    // ─────────────────────────────────────────────────────────
+    _applyFrame() {
+      const frameType = this._attr('frame', 'square');
+      const cfg       = FRAMES[frameType] || FRAMES.square;
+      const color     = this._attr('frame-color', '#f0a500');
+      const size      = this._num('frame-size', 85);
+      const showGrid  = this._bool('show-grid');
+      const showGuide = this._bool('show-guide', true);
+      const hintTxt   = this._attr('hint', HINTS[frameType] || '');
+
+      const box = this._q('#frame-box');
+      const sl  = this._q('#scan-line');
+
+      // CSS custom property cho màu
+      this._root.host.style.setProperty('--frame-color', color);
+
+      if (frameType === 'none') {
+        box.className = 'frame-none';
+        box.style.cssText = '';
+        sl.classList.remove('active');
+        this._q('#hint').textContent = '';
+        return;
+      }
+
+      // Tính kích thước khung
+      const baseW = size;
+      let boxW, boxH;
+
+      if (cfg.ar) {
+        // Tỉ lệ cố định (card=1.586, circle=1)
+        boxW = baseW;
+        // Tính % height dựa trên AR — giả định host là square-ish
+        // Dùng vw để tính đơn giản
+        boxH = null; // sẽ set bằng aspect-ratio
+      } else {
+        boxW = cfg.w;
+        boxH = cfg.h;
+      }
+
+      box.className = '';
+      if (showGrid) box.classList.add('show-grid');
+
+      box.style.width        = boxW + '%';
+      box.style.height       = boxH ? boxH + '%' : '';
+      box.style.aspectRatio  = cfg.ar ? `${cfg.ar}` : '';
+      box.style.borderRadius = cfg.r + (cfg.r === 50 ? '%' : 'px');
+
+      if (showGuide && frameType !== 'none') {
+        sl.classList.add('active');
+      } else {
+        sl.classList.remove('active');
+      }
+
+      this._q('#hint').textContent = hintTxt;
+
+      if (this._bool('sharpness-bar')) {
+        this._q('#sharpness-wrap').classList.add('visible');
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // APPLY UI CONTROLS
+    // ─────────────────────────────────────────────────────────
+    _applyUI() {
+      const showUI = this._bool('ui', true);
+      const hide   = (this._attr('hide-controls', '') || '').split(',').map(s => s.trim());
+
+      this._q('#controls').classList.toggle('hidden', !showUI);
+      if (!showUI) return;
+
+      this._q('#btn-zoom-in') .classList.toggle('hidden', hide.includes('zoom'));
+      this._q('#btn-zoom-out').classList.toggle('hidden', hide.includes('zoom'));
+      this._q('#btn-torch')   .classList.toggle('hidden', hide.includes('flash'));
+      this._q('#btn-flip')    .classList.toggle('hidden', hide.includes('flip'));
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // CAMERA — START / STOP
+    // ─────────────────────────────────────────────────────────
+    start() {
+      if (this._stream) {
+        this._stream.getTracks().forEach(t => t.stop());
+        this._stream = null;
+        this._track  = null;
+      }
+
+      const facing = this._attr('facing', 'environment');
+      const constraints = {
+        audio: false,
+        video: { facingMode: { ideal: facing } }
+      };
+
+      navigator.mediaDevices.getUserMedia(constraints)
+        .then(stream => this._onStream(stream))
+        .catch(err   => this._onCamError(err, false));
+    }
+
+    _onStream(stream) {
+      this._stream = stream;
+      this._track  = stream.getVideoTracks()[0];
+
+      const vid = this._q('video');
+      vid.srcObject = stream;
+
+      // Samsung Internet: cần load() trước play()
+      vid.load();
+
+      vid.onplaying = () => {
+        this._q('#error-overlay').classList.remove('visible');
+        this._updateZoomUI();
+
+        const w = vid.videoWidth, h = vid.videoHeight;
+
+        // Bắn event camera-ready
+        this._emit('camera-ready', { width: w, height: h });
+        if (typeof this.onReady === 'function') this.onReady({ width: w, height: h });
+
+        // Bắt đầu loop nếu cần
+        if (this._bool('auto-capture') || this._bool('sharpness-bar')) {
+          this._startSharpnessLoop();
+        }
+        if (this._bool('continuous')) {
+          this.startContinuous();
+        }
+      };
+
+      vid.play().catch(() => {
+        // Một số trình duyệt tự play — ignore an toàn
+      });
+    }
+
+    _onCamError(err, wasConstraint) {
+      const known = ERROR_MESSAGES[err.name] || {
+        code: 'UNKNOWN', msg: 'Lỗi camera: ' + err.message, recoverable: false
+      };
+
+      // OverconstrainedError: thử lại với constraints đơn giản hơn
+      if (!wasConstraint && (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError')) {
+        navigator.mediaDevices.getUserMedia({ audio: false, video: true })
+          .then(stream => this._onStream(stream))
+          .catch(err2  => this._onCamError(err2, true));
+        return;
+      }
+
+      // Hiện error overlay
+      this._q('#error-overlay .err-msg').textContent = known.msg;
+      this._q('#error-overlay').classList.add('visible');
+      this._q('#btn-retry').style.display = known.recoverable ? 'block' : 'none';
+
+      this._emit('camera-error', { code: known.code, message: known.msg, recoverable: known.recoverable });
+      if (typeof this.onError === 'function') this.onError({ code: known.code, message: known.msg });
+    }
+
+    stop() {
+      this.stopContinuous();
+      this._stopSharpnessLoop();
+      if (this._stream) {
+        this._stream.getTracks().forEach(t => t.stop());
+        this._stream = null;
+        this._track  = null;
+      }
+      this._emit('camera-stop', {});
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // CAPTURE — Chụp ảnh
+    // ─────────────────────────────────────────────────────────
+    capture() {
+      return new Promise((resolve, reject) => {
+        const vid = this._q('video');
+        if (!this._stream || vid.videoWidth === 0) {
+          reject(new Error('Camera chưa sẵn sàng'));
+          return;
+        }
+
+        const cvs = this._q('canvas');
+        cvs.width  = vid.videoWidth;
+        cvs.height = vid.videoHeight;
+        const ctx  = cvs.getContext('2d');
+
+        // Flip ngang nếu dùng camera trước
+        if (this._attr('facing','environment') === 'user') {
+          ctx.save();
+          ctx.translate(cvs.width, 0);
+          ctx.scale(-1, 1);
+        }
+        ctx.drawImage(vid, 0, 0);
+        if (this._attr('facing','environment') === 'user') ctx.restore();
+
+        // Áp dụng zoom vào canvas nếu digital zoom
+        const zoom = this._zoom;
+        let sx = 0, sy = 0, sw = cvs.width, sh = cvs.height;
+        if (zoom > 1) {
+          sw = Math.round(cvs.width  / zoom);
+          sh = Math.round(cvs.height / zoom);
+          sx = Math.round((cvs.width  - sw) / 2);
+          sy = Math.round((cvs.height - sh) / 2);
+        }
+
+        // Đo sharpness trước khi crop
+        const sharpness = measureSharpness(cvs, sx, sy, sw, sh);
+
+        // Xác định vùng crop theo frame
+        let cropX = sx, cropY = sy, cropW = sw, cropH = sh;
+        if (this._bool('crop-to-frame', true) && this._attr('frame','square') !== 'none') {
+          const r = this._getCropRect(cvs.width, cvs.height, zoom);
+          cropX = r.x; cropY = r.y; cropW = r.w; cropH = r.h;
+        }
+
+        const result = processCanvas(cvs, {
+          cropX, cropY, cropW, cropH,
+          maxWidth : this._num('max-width', 1280),
+          quality  : this._num('quality', 0.88),
+          grayscale: this._bool('grayscale'),
+          output   : this._attr('output', 'base64'),
+        });
+
+        const detail = {
+          ...result,
+          sharpness,
+          frameType : this._attr('frame', 'square'),
+          timestamp : Date.now(),
+        };
+
+        this._emit('camera-result', detail);
+        if (typeof this.onResult === 'function') this.onResult(detail);
+        resolve(detail);
+      });
+    }
+
+    // Tính crop rect tương ứng với khung overlay
+    _getCropRect(vidW, vidH, zoom) {
+      const frameType = this._attr('frame', 'square');
+      const cfg = FRAMES[frameType] || FRAMES.square;
+      const size = this._num('frame-size', 85);
+
+      const effectiveW = vidW / zoom;
+      const effectiveH = vidH / zoom;
+      const offsetX    = (vidW - effectiveW) / 2;
+      const offsetY    = (vidH - effectiveH) / 2;
+
+      let w, h;
+      if (cfg.ar) {
+        w = effectiveW * (size / 100);
+        h = w / cfg.ar;
+        if (h > effectiveH * 0.9) { h = effectiveH * 0.9; w = h * cfg.ar; }
+      } else {
+        w = effectiveW * (cfg.w / 100);
+        h = effectiveH * (cfg.h / 100);
+      }
+
+      return {
+        x: Math.round(offsetX + (effectiveW - w) / 2),
+        y: Math.round(offsetY + (effectiveH - h) / 2),
+        w: Math.round(w),
+        h: Math.round(h),
+      };
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // SHARPNESS LOOP — Real-time đo độ nét
+    // ─────────────────────────────────────────────────────────
+    _startSharpnessLoop() {
+      this._stopSharpnessLoop();
+      this._sharpTimer = setInterval(() => this._tickSharpness(), 400);
+    }
+
+    _stopSharpnessLoop() {
+      if (this._sharpTimer) { clearInterval(this._sharpTimer); this._sharpTimer = null; }
+      this._autoConfirm = 0;
+    }
+
+    _tickSharpness() {
+      const vid = this._q('video');
+      if (!this._stream || vid.videoWidth === 0) return;
+
+      const cvs = this._q('canvas');
+      cvs.width = vid.videoWidth; cvs.height = vid.videoHeight;
+      cvs.getContext('2d').drawImage(vid, 0, 0);
+
+      const zoom = this._zoom;
+      let sx = 0, sy = 0, sw = cvs.width, sh = cvs.height;
+      if (zoom > 1) {
+        sw = Math.round(sw / zoom); sh = Math.round(sh / zoom);
+        sx = Math.round((cvs.width - sw) / 2); sy = Math.round((cvs.height - sh) / 2);
+      }
+
+      const val = measureSharpness(cvs, sx, sy, sw, sh);
+
+      // Cập nhật UI sharpness bar
+      if (this._bool('sharpness-bar')) {
+        this._updateSharpnessUI(val);
+      }
+
+      // Bắn event
+      this._emit('sharpness-change', { value: val });
+      if (typeof this.onSharpness === 'function') this.onSharpness(val);
+
+      // Auto-capture logic
+      if (this._bool('auto-capture')) {
+        const threshold = this._num('sharpness-threshold', 75);
+        if (val >= threshold) {
+          this._autoConfirm++;
+          this._updateCaptureRing(this._autoConfirm, 3);
+          if (this._autoConfirm >= 3) {
+            // 3 frame liên tiếp đủ nét → chụp
+            this._autoConfirm = 0;
+            this._stopSharpnessLoop();
+            this._hideCaptureRing();
+            if (!this._busy) this.capture();
+          }
+        } else {
+          this._autoConfirm = 0;
+          this._hideCaptureRing();
+        }
+      }
+    }
+
+    _updateSharpnessUI(val) {
+      const fill  = this._q('#sharpness-fill');
+      const pct   = this._q('#sharpness-pct');
+      fill.style.width = val + '%';
+      fill.className = val < 40 ? 'low' : val < 70 ? 'medium' : 'high';
+      pct.textContent  = val + '%';
+    }
+
+    _updateCaptureRing(step, total) {
+      const ring = this._q('#capture-ring');
+      const circ = ring.querySelector('circle');
+      ring.classList.add('visible');
+      const progress  = step / total;
+      const perimeter = 2 * Math.PI * 35; // r=35
+      circ.style.strokeDashoffset = perimeter * (1 - progress);
+    }
+    _hideCaptureRing() {
+      this._q('#capture-ring').classList.remove('visible');
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // CONTINUOUS SCAN
+    // ─────────────────────────────────────────────────────────
+    startContinuous() {
+      this.stopContinuous();
+      const ivl = this._num('continuous-interval', 2000);
+      this._doCaptureBusy();
+      this._autoTimer = setInterval(() => this._doCaptureBusy(), ivl);
+    }
+
+    stopContinuous() {
+      if (this._autoTimer) { clearInterval(this._autoTimer); this._autoTimer = null; }
+    }
+
+    async _doCaptureBusy() {
+      if (this._busy) return;
+      this._busy = true;
+      try { await this.capture(); }
+      finally { this._busy = false; }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // ZOOM — Digital zoom qua canvas crop
+    // ─────────────────────────────────────────────────────────
+    setZoom(val) {
+      this._zoom = Math.max(1.0, Math.min(5.0, parseFloat(val) || 1));
+      this._updateZoomUI();
+
+      // Thử dùng hardware zoom nếu trình duyệt hỗ trợ (Android Chrome)
+      if (this._track) {
+        try {
+          const caps = this._track.getCapabilities();
+          if (caps.zoom) {
+            const hw = caps.zoom.min + (caps.zoom.max - caps.zoom.min) * ((this._zoom - 1) / 4);
+            this._track.applyConstraints({ advanced: [{ zoom: hw }] }).catch(() => {});
+          }
+        } catch(e) { /* iOS không hỗ trợ */ }
+      }
+    }
+    zoomIn()  { this.setZoom(this._zoom + 0.5); }
+    zoomOut() { this.setZoom(this._zoom - 0.5); }
+
+    _updateZoomUI() {
+      const zi = this._q('#zoom-indicator');
+      if (this._zoom > 1.0) {
+        zi.classList.add('visible');
+        zi.textContent = this._zoom.toFixed(1) + '×';
+      } else {
+        zi.classList.remove('visible');
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // TORCH — Đèn flash
+    // ─────────────────────────────────────────────────────────
+    torch(on) {
+      if (!this._track) return;
+      this._track.applyConstraints({ advanced: [{ torch: !!on }] })
+        .then(() => {
+          this._torchOn = !!on;
+          this._q('#btn-torch').classList.toggle('on', this._torchOn);
+        })
+        .catch(() => {
+          // Thiết bị không hỗ trợ torch — ẩn nút
+          this._q('#btn-torch').classList.add('hidden');
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // FLIP — Đổi camera
+    // ─────────────────────────────────────────────────────────
+    flip() {
+      const cur = this._attr('facing', 'environment');
+      this.setAttribute('facing', cur === 'environment' ? 'user' : 'environment');
+      // attributeChangedCallback sẽ gọi start() lại
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // SET FRAME — Đổi khung lúc runtime
+    // ─────────────────────────────────────────────────────────
+    setFrame(frameType) {
+      if (!FRAMES[frameType]) return;
+      this.setAttribute('frame', frameType);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // PUBLIC GETTERS
+    // ─────────────────────────────────────────────────────────
+    get isReady()     { return !!this._stream && this._q('video').videoWidth > 0; }
+    get currentZoom() { return this._zoom; }
+    get facing()      { return this._attr('facing', 'environment'); }
+    getSharpness() {
+      const vid = this._q('video');
+      if (!this._stream || vid.videoWidth === 0) return 0;
+      const cvs = this._q('canvas');
+      cvs.width = vid.videoWidth; cvs.height = vid.videoHeight;
+      cvs.getContext('2d').drawImage(vid, 0, 0);
+      return measureSharpness(cvs, 0, 0, cvs.width, cvs.height);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // EMIT CUSTOM EVENT
+    // ─────────────────────────────────────────────────────────
+    _emit(name, detail) {
+      this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // ĐĂNG KÝ WEB COMPONENT
+  // ─────────────────────────────────────────────────────────────
+  if (!customElements.get('camera-scanner')) {
+    customElements.define('camera-scanner', CameraScanner);
+  }
+
+})();
+
+    </script>
+    <style>
+        html { scroll-behavior: smooth; }
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        #signature-upload-input { display: none; }
+        #cropper-container { display: none; }
+        #image-to-crop { max-width: 100%; display: block; }
+
+        /* Khung Chọn Ảnh (cropper) và khung Kết Quả dùng chung chiều cao để nằm ngang hàng nhau,
+           to hơn hẳn trên desktop để thao tác co kéo dễ, nhưng vẫn gọn trên di động. */
+        .signature-panel-box {
+            height: 300px;
+            display: flex;
+            flex-direction: column;
+        }
+        @media (min-width: 1024px) {
+            .signature-panel-box {
+                height: min(58vh, 560px);
+                min-height: 380px;
+            }
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #cbd5e1;
+            transition: .3s;
+            border-radius: 26px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider { background-color: #667eea; }
+        input:checked + .toggle-slider:before { transform: translateX(24px); }
+        .canvas-container {
+            background: white;
+            border: 2px dashed #e2e8f0;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        .result-canvas {
+            background: repeating-conic-gradient(#f1f5f9 0% 25%, white 0% 50%) 50% / 20px 20px;
+        }
+        .auto-btn {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: #ede9fe;
+            color: #6d28d9;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid #ddd6fe;
+            transition: all .15s ease;
+        }
+        .auto-btn:hover { background: #ddd6fe; }
+
+        /* Nút Tối Ưu Tự Động - nổi bật, có hiệu ứng khi bấm */
+        .auto-optimize-btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 14px;
+            font-weight: 800;
+            font-size: 14px;
+            color: white;
+            background: linear-gradient(135deg, #7c3aed, #4f46e5);
+            box-shadow: 0 4px 14px rgba(124, 58, 237, .35);
+            border: none;
+            cursor: pointer;
+            transition: transform .15s ease, box-shadow .15s ease, background .2s ease;
+        }
+        .auto-optimize-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(124, 58, 237, .45); }
+        .auto-optimize-btn:active { transform: scale(0.97); }
+        .auto-optimize-btn.is-done {
+            background: linear-gradient(135deg, #16a34a, #059669);
+            box-shadow: 0 4px 14px rgba(22, 163, 74, .4);
+            transform: scale(1.03);
+        }
+        @keyframes pulseOnce {
+            0% { box-shadow: 0 0 0 0 rgba(22,163,74,.55); }
+            100% { box-shadow: 0 0 0 16px rgba(22,163,74,0); }
+        }
+        .auto-optimize-btn.is-done::after { content: ''; }
+        .auto-optimize-btn.is-done { animation: pulseOnce .6s ease-out; }
+
+        /* Toggle pill cho tuỳ chọn xuất ảnh (nền / định dạng) */
+        .export-toggle-group {
+            display: inline-flex;
+            background: #f1f5f9;
+            border-radius: 10px;
+            padding: 3px;
+            gap: 2px;
+        }
+        .export-toggle-btn {
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            transition: all .15s ease;
+        }
+        .export-toggle-btn.active {
+            background: white;
+            color: #6d28d9;
+            box-shadow: 0 1px 4px rgba(0,0,0,.15);
+        }
+        .export-toggle-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+        /* Đảm bảo <camera-scanner> lấp đầy khung chứa dù thư viện ngoài không tự đặt display */
+        camera-scanner { display: block; width: 100%; height: 100%; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-5xl mx-auto">
+        <!-- Header -->
+        <header class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-white mb-2 drop-shadow-lg">
+                🖊️ Tạo Chữ Ký Số
+            </h1>
+            <p class="text-white/90 text-sm">Công cụ hỗ trợ CDS - CNTT.5TL.DAV.EDU.VN</p>
+        </header>
+
+        <!-- Main Card -->
+        <div class="glass-effect rounded-2xl shadow-2xl p-4 md:p-6 mb-4">
+            <!-- Tabs -->
+            <div class="flex gap-2 mb-6 bg-gray-100 p-1 rounded-xl">
+                <button id="tab-upload" class="tab-btn flex-1 px-4 py-3 rounded-lg font-medium transition-all">
+                    📤 Tải Ảnh
+                </button>
+                <button id="tab-text" class="tab-btn flex-1 px-4 py-3 rounded-lg font-medium transition-all">
+                    ✍️ Gõ Chữ
+                </button>
+                <button id="tab-draw" class="tab-btn flex-1 px-4 py-3 rounded-lg font-medium transition-all">
+                    🎨 Vẽ Tay
+                </button>
+                <button id="tab-library" class="tab-btn flex-1 px-4 py-3 rounded-lg font-medium transition-all">
+                    📚 Thư Viện
+                </button>
+            </div>
+
+            <!-- Upload Mode -->
+            <div id="content-upload" class="tab-content">
+                <div class="lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start space-y-4 lg:space-y-0">
+
+                    <!-- Cột trái: Chọn ảnh / Cắt ảnh -->
+                    <div class="space-y-3">
+                        <!-- Upload Section -->
+                        <div id="upload-initial-view" class="signature-panel-box items-center justify-center text-center border-2 border-dashed border-gray-300 rounded-xl px-4">
+                            <input type="file" id="signature-upload-input" accept="image/*">
+                            <div class="flex flex-wrap items-center justify-center gap-3">
+                                <label for="signature-upload-input" class="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-medium cursor-pointer hover:shadow-lg transition">
+                                    📤 Chọn Ảnh Có Sẵn
+                                </label>
+                                <button id="open-camera-btn" type="button"
+                                    class="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-rose-500 to-orange-500 text-white rounded-xl font-medium hover:shadow-lg transition">
+                                    📷 Chụp Trực Tiếp
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-3">JPG, PNG - Nên dùng nền trắng, chụp/scan rõ nét</p>
+                        </div>
+
+                        <!-- Cropper Section -->
+                        <div id="cropper-container" class="space-y-3">
+                            <div class="signature-panel-box bg-gray-100 rounded-xl p-3 overflow-hidden">
+                                <img id="image-to-crop" class="max-w-full rounded-lg">
+                            </div>
+
+                            <!-- Nút Tối Ưu Tự Động - hành động chính, 1 chạm ra kết quả cuối -->
+                            <button id="auto-optimize-btn" class="auto-optimize-btn" type="button">
+                                ⚡ Tối Ưu Tự Động (1 chạm)
+                            </button>
+                            <p class="text-center text-[11px] text-gray-400 -mt-1">Tự nhận diện nền, lọc & cắt viền - ra kết quả ngay</p>
+
+                            <details class="bg-white rounded-lg">
+                                <summary class="cursor-pointer text-xs font-semibold text-gray-600 px-3 py-2 select-none">
+                                    🛠️ Tinh chỉnh thủ công (tuỳ chọn)
+                                </summary>
+                                <div class="px-3 pb-3 grid md:grid-cols-2 gap-3">
+                                    <!-- Left Column -->
+                                    <div class="space-y-3">
+                                        <div class="bg-gray-50 rounded-lg p-3">
+                                            <div class="flex items-center justify-between mb-1">
+                                                <label class="text-xs font-semibold text-gray-700">
+                                                    Lọc Nền: <span id="threshold-value" class="text-purple-600">128</span>
+                                                </label>
+                                                <button id="auto-threshold-btn" class="auto-btn" type="button">⚡ Dò Ngưỡng</button>
+                                            </div>
+                                            <input type="range" id="threshold-slider" min="10" max="245" value="128"
+                                                class="w-full h-1.5 bg-gray-200 rounded-lg cursor-pointer">
+                                        </div>
+
+                                        <div class="bg-gray-50 rounded-lg p-3">
+                                            <label class="text-xs font-semibold text-gray-700 block mb-1">
+                                                Mềm Viền (khử răng cưa): <span id="feather-value" class="text-purple-600">22</span>
+                                            </label>
+                                            <input type="range" id="feather-slider" min="0" max="60" value="22"
+                                                class="w-full h-1.5 bg-gray-200 rounded-lg cursor-pointer">
+                                        </div>
+
+                                        <div class="bg-gray-50 rounded-lg p-3">
+                                            <label class="text-xs font-semibold text-gray-700 block mb-1">
+                                                Làm Mịn Thêm: <span id="blur-value" class="text-purple-600">0</span>
+                                            </label>
+                                            <input type="range" id="blur-slider" min="0" max="3" value="0" step="0.5"
+                                                class="w-full h-1.5 bg-gray-200 rounded-lg cursor-pointer">
+                                        </div>
+
+                                        <div class="bg-gray-50 rounded-lg p-3">
+                                            <label class="text-xs font-semibold text-gray-700 block mb-1">
+                                                Độ Đậm: <span id="contrast-value" class="text-purple-600">0</span>
+                                            </label>
+                                            <input type="range" id="contrast-slider" min="0" max="50" value="0"
+                                                class="w-full h-1.5 bg-gray-200 rounded-lg cursor-pointer">
+                                        </div>
+                                    </div>
+
+                                    <!-- Right Column -->
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                            <label class="text-xs font-semibold text-gray-800">Lọc Nhiễu (đốm nhỏ)</label>
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" id="noise-filter-toggle" checked>
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                        </div>
+
+                                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                            <label class="text-xs font-semibold text-gray-800">Cắt Viền Tự Động</label>
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" id="autotrim-toggle" checked>
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                        </div>
+
+                                        <button id="process-crop-btn"
+                                            class="w-full py-3 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg font-bold hover:shadow-lg transition text-sm">
+                                            ✨ Áp Dụng Thủ Công
+                                        </button>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+
+                    <!-- Cột phải: Kết quả -->
+                    <div class="space-y-3">
+                        <div class="signature-panel-box result-canvas items-center justify-center rounded-xl overflow-hidden border-2 border-gray-200">
+                            <p id="upload-placeholder" class="text-gray-400 text-center text-sm">
+                                Kết quả hiển thị ở đây
+                            </p>
+                            <canvas id="upload-canvas" width="800" height="200" class="max-w-full max-h-full w-auto h-auto hidden"></canvas>
+                        </div>
+
+                        <!-- Inline Color Change -->
+                        <div id="upload-color-container" class="hidden flex items-center gap-3 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg">
+                            <label class="text-xs font-semibold text-gray-700 whitespace-nowrap">Đổi màu:</label>
+                            <div id="color-palette-upload" class="flex flex-wrap gap-2"></div>
+                        </div>
+
+                        <!-- Download Options -->
+                        <div id="download-options" class="hidden">
+                            <div class="flex flex-wrap gap-2">
+                                <button data-size="200" class="download-res-btn px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition text-xs">200px</button>
+                                <button data-size="400" class="download-res-btn px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition text-xs">400px</button>
+                                <button data-size="800" class="download-res-btn px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition text-xs">800px</button>
+                                <button data-size="original" class="download-res-btn px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:shadow-lg transition text-xs">Gốc</button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Text Mode -->
+            <div id="content-text" class="tab-content hidden">
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-semibold mb-2 text-gray-700">Tên của bạn</label>
+                        <input id="signature-text-input" type="text" placeholder="Nhập tên của bạn..."
+                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:outline-none transition">
+                    </div>
+                    <div class="grid md:grid-cols-3 gap-6">
+                        <div>
+                            <label class="block text-sm font-semibold mb-2 text-gray-700">Kiểu Chữ</label>
+                            <select id="font-family-select" class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:outline-none"></select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-2 text-gray-700">
+                                Cỡ Chữ: <span id="font-size-value" class="text-purple-600">48</span>px
+                            </label>
+                            <input type="range" id="font-size-slider" min="24" max="96" value="48"
+                                class="w-full h-2 bg-gray-200 rounded-lg cursor-pointer">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-2 text-gray-700">Màu Sắc</label>
+                            <div id="color-palette-text" class="flex flex-wrap gap-2"></div>
+                        </div>
+                    </div>
+                    <div class="canvas-container p-4">
+                        <canvas id="text-canvas" width="800" height="250" class="w-full h-auto"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Draw Mode -->
+            <div id="content-draw" class="tab-content hidden">
+                <div class="space-y-6">
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-semibold mb-2 text-gray-700">Màu Vẽ</label>
+                            <div id="color-palette-draw" class="flex flex-wrap gap-2"></div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-2 text-gray-700">
+                                Cỡ Bút: <span id="brush-size-value" class="text-purple-600">3</span>px
+                            </label>
+                            <input type="range" id="brush-size-slider" min="1" max="12" value="3" step="0.5"
+                                class="w-full h-2 bg-gray-200 rounded-lg cursor-pointer">
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+                        <div>
+                            <label class="text-xs font-semibold text-gray-800 block">✨ Làm Đẹp Chữ Ký Tự Nhiên</label>
+                            <p class="text-[11px] text-gray-500">Làm mượt nét run tay khi vẽ bằng chuột, vuốt thon đầu/cuối nét như bút thật</p>
+                        </div>
+                        <label class="toggle-switch shrink-0 ml-3">
+                            <input type="checkbox" id="beautify-toggle" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="canvas-container p-4">
+                        <p class="text-sm text-gray-600 mb-3">Vẽ chữ ký của bạn bên dưới:</p>
+                        <div id="draw-canvas-wrapper" class="w-full h-[260px] sm:h-[320px] lg:h-[400px] bg-white rounded-lg overflow-hidden">
+                            <canvas id="draw-canvas" class="w-full h-full block cursor-crosshair"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Library Mode -->
+            <div id="content-library" class="tab-content hidden">
+                <div class="space-y-3">
+                    <input type="text" id="library-search" placeholder="🔍 Tìm theo tên hoặc ghi chú..."
+                        class="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:outline-none text-sm">
+
+                    <!-- Kết nối trực tiếp file (USB hoặc bất kỳ thư mục nào trên máy) - Chrome/Edge - cách khuyên dùng -->
+                    <div id="usb-connect-row" class="hidden flex flex-wrap items-center gap-2 p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+                        <button id="connect-open-btn" type="button"
+                            class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition whitespace-nowrap">
+                            📂 Mở File Có Sẵn
+                        </button>
+                        <button id="connect-new-btn" type="button"
+                            class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition whitespace-nowrap">
+                            🆕 Tạo File Mới
+                        </button>
+                        <button id="disconnect-usb-btn" type="button"
+                            class="hidden px-3 py-2 bg-white border border-indigo-300 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition whitespace-nowrap">
+                            ✖️ Ngắt Kết Nối
+                        </button>
+                        <span id="usb-status" class="text-[11px] text-indigo-700 font-medium"></span>
+                    </div>
+
+                    <!-- Xuất / Nhập thủ công - luôn dùng được ở mọi trình duyệt -->
+                    <div class="flex flex-wrap gap-2">
+                        <button id="export-library-btn" type="button"
+                            class="px-3 py-2 bg-gray-700 text-white rounded-xl text-xs font-semibold hover:bg-gray-800 transition whitespace-nowrap">
+                            📤 Xuất Bản Sao (.json)
+                        </button>
+                        <label class="px-3 py-2 bg-gray-700 text-white rounded-xl text-xs font-semibold hover:bg-gray-800 transition cursor-pointer whitespace-nowrap">
+                            📥 Nhập Từ File
+                            <input type="file" id="import-library-input" accept=".json,application/json" class="hidden">
+                        </label>
+                        <button id="clear-library-btn" type="button"
+                            class="px-3 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-semibold hover:bg-red-100 transition whitespace-nowrap">
+                            🗑️ Xoá Toàn Bộ
+                        </button>
+                    </div>
+
+                    <div class="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl p-3 leading-relaxed">
+                        💡 <strong>Lưu ý về vị trí file:</strong> Trình duyệt web không được phép tự ghi file
+                        vào đúng thư mục chứa app (giới hạn bảo mật chung của mọi trang web) — nút Tải/Xuất luôn đưa vào thư mục Downloads.<br>
+                        Trên Chrome/Edge, dùng khối <strong>"Mở/Tạo File"</strong> ở trên để chọn đúng file .json — dù nó nằm trong <strong>folder trên ổ cứng PC hay trên USB đều được</strong> —
+                        từ đó mọi thay đổi (thêm, sửa, xoá) sẽ <strong>tự động ghi thẳng vào đúng file đó</strong>, không cần bấm Xuất nữa.
+                        Riêng nút <strong>"📥 Nhập Từ File"</strong> bên dưới chỉ đọc dữ liệu, KHÔNG ghi ngược lại được (giới hạn của kiểu nút chọn file thường, áp dụng cho mọi trình duyệt).<br>
+                        Trình duyệt không hỗ trợ (Firefox, Safari...) thì dùng <strong>"Xuất Bản Sao"</strong> rồi tự chuyển file .json vừa tải vào đúng thư mục/USB bạn muốn.
+                    </div>
+                    <p id="library-empty" class="text-center py-10 text-gray-400 text-sm">Chưa có chữ ký nào được lưu.</p>
+                    <div id="library-list" class="space-y-2"></div>
+                </div>
+            </div>
+
+            <!-- Export Options (nền / định dạng) -->
+            <div class="flex flex-wrap items-center gap-4 mt-4 p-3 bg-white/70 rounded-xl border border-gray-200">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-gray-700">Nền ảnh:</span>
+                    <div class="export-toggle-group">
+                        <button id="bg-transparent-btn" class="export-toggle-btn active" type="button">Trong suốt</button>
+                        <button id="bg-white-btn" class="export-toggle-btn" type="button">Trắng</button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-gray-700">Định dạng:</span>
+                    <div class="export-toggle-group">
+                        <button id="format-png-btn" class="export-toggle-btn active" type="button">PNG</button>
+                        <button id="format-jpg-btn" class="export-toggle-btn" type="button">JPG</button>
+                    </div>
+                </div>
+                <p class="text-[11px] text-gray-400">JPG luôn xuất kèm nền trắng (không hỗ trợ trong suốt)</p>
+            </div>
+
+            <!-- Action Buttons -->
+            <div id="action-buttons-bar" class="flex flex-wrap gap-3 mt-4 pt-4 border-t-2 border-gray-200">
+                <button id="main-download-btn"
+                    class="flex-1 min-w-[160px] py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-bold hover:shadow-lg transition text-sm">
+                    💾 Tải Chữ Ký
+                </button>
+                <button id="save-library-btn"
+                    class="flex-1 min-w-[160px] py-2.5 border-2 border-purple-400 text-purple-700 bg-purple-50 rounded-xl font-bold hover:bg-purple-100 transition text-sm">
+                    📚 Lưu Vào Thư Viện
+                </button>
+                <button id="undo-btn"
+                    class="px-5 py-2.5 border-2 border-gray-300 rounded-xl font-medium hover:bg-gray-50 transition text-sm" disabled>
+                    ↶ Hoàn tác
+                </button>
+                <button id="clear-btn"
+                    class="px-5 py-2.5 border-2 border-gray-300 rounded-xl font-medium hover:bg-gray-50 transition text-sm">
+                    🗑️ Làm Mới
+                </button>
+            </div>
+        </div>
+
+        <!-- Compact Features -->
+        <div class="grid md:grid-cols-3 gap-3 mb-4">
+            <div class="glass-effect rounded-xl p-4 text-center">
+                <div class="text-2xl mb-1">⚡</div>
+                <h3 class="font-bold text-gray-800 text-sm mb-1">Tối Ưu 1 Chạm</h3>
+                <p class="text-xs text-gray-600">Tự lọc nền, mượt viền, cắt gọn</p>
+            </div>
+            <div class="glass-effect rounded-xl p-4 text-center">
+                <div class="text-2xl mb-1">🖋️</div>
+                <h3 class="font-bold text-gray-800 text-sm mb-1">Làm Đẹp Nét Vẽ</h3>
+                <p class="text-xs text-gray-600">Mượt nét chuột như bút thật</p>
+            </div>
+            <div class="glass-effect rounded-xl p-4 text-center">
+                <div class="text-2xl mb-1">📥</div>
+                <h3 class="font-bold text-gray-800 text-sm mb-1">PNG hoặc JPG</h3>
+                <p class="text-xs text-gray-600">Nền trong suốt hoặc nền trắng</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center text-white/80 text-sm">
+            <p>© 2025 B505.CNTT.5TL.DAV.EDU.VN</p>
+        </footer>
+    </div>
+
+    <!-- Modal: Lưu Vào Thư Viện -->
+    <div id="save-library-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-2xl">
+            <h3 id="save-modal-title" class="font-bold text-gray-800 mb-1">📚 Lưu Vào Thư Viện</h3>
+            <p id="save-modal-subtitle" class="text-[11px] text-gray-500 mb-3 hidden"></p>
+            <label class="text-xs font-semibold text-gray-600 block mb-1">Đơn vị *</label>
+            <input type="text" id="lib-unit-input" list="unit-datalist" placeholder="VD: Phòng Kế Toán"
+                class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg mb-3 focus:border-purple-500 focus:outline-none text-sm">
+            <datalist id="unit-datalist"></datalist>
+            <label class="text-xs font-semibold text-gray-600 block mb-1">Tên người ký *</label>
+            <input type="text" id="lib-name-input" list="name-datalist" placeholder="VD: Nguyễn Văn A"
+                class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg mb-3 focus:border-purple-500 focus:outline-none text-sm">
+            <datalist id="name-datalist"></datalist>
+            <label class="text-xs font-semibold text-gray-600 block mb-1">Ghi chú (tuỳ chọn - vd: "ký tắt", "mẫu 2"...)</label>
+            <input type="text" id="lib-note-input" placeholder="VD: Chữ ký đầy đủ"
+                class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg mb-1 focus:border-purple-500 focus:outline-none text-sm">
+            <button id="save-as-new-link" type="button"
+                class="hidden text-[11px] text-purple-600 underline mb-3 mt-1">↺ Lưu thành bản ghi mới (không ghi đè)</button>
+            <div class="flex gap-2 mt-3">
+                <button id="save-library-cancel-btn" type="button"
+                    class="flex-1 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">Huỷ</button>
+                <button id="save-library-confirm-btn" type="button"
+                    class="flex-1 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg text-sm font-bold hover:shadow-lg">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Chụp Trực Tiếp Chữ Ký -->
+    <div id="camera-modal" class="hidden fixed inset-0 bg-black z-50 flex flex-col">
+        <div class="flex items-center justify-between px-4 py-3 bg-black text-white shrink-0">
+            <span class="font-semibold text-sm">📷 Chụp Chữ Ký</span>
+            <button id="camera-modal-close-btn" type="button" class="text-white/80 hover:text-white text-2xl leading-none px-2">✕</button>
+        </div>
+        <div id="camera-mount-point" class="flex-1 relative bg-black"></div>
+        <div id="camera-message-box" class="hidden absolute inset-0 flex items-center justify-center p-6 bg-black/90 text-white text-center">
+            <div class="max-w-xs">
+                <p id="camera-message-text" class="text-sm mb-4 leading-relaxed" style="white-space: pre-line;"></p>
+                <button id="camera-message-close-btn" type="button"
+                    class="px-4 py-2 bg-white text-gray-800 rounded-lg text-sm font-semibold hover:bg-gray-100">Đóng, dùng Chọn Ảnh Có Sẵn</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    /* =========================================================
+       CẤU HÌNH CHUNG
+    ========================================================= */
+    const fontGroups = [
+        {
+            label: '✒️ Giống chữ ký thật nhất',
+            items: [
+                { name: 'Mrs Saint Delafield',  value: "'Mrs Saint Delafield', cursive" },
+                { name: 'Herr Von Muellerhoff', value: "'Herr Von Muellerhoff', cursive" },
+                { name: 'Alex Brush',           value: "'Alex Brush', cursive" },
+                { name: 'Whisper',              value: "'Whisper', cursive" },
+                { name: 'Mr Dafoe',             value: "'Mr Dafoe', cursive" },
+                { name: 'Birthstone',           value: "'Birthstone', cursive" },
+                { name: 'Qwigley',              value: "'Qwigley', cursive" },
+                { name: 'La Belle Aurore',      value: "'La Belle Aurore', cursive" },
+                { name: 'Rouge Script',         value: "'Rouge Script', cursive" },
+                { name: 'Zeyada',               value: "'Zeyada', cursive" },
+                { name: 'Allura',               value: "'Allura', cursive" },
+                { name: 'Petit Formal Script',  value: "'Petit Formal Script', cursive" },
+                { name: 'Grand Hotel',          value: "'Grand Hotel', cursive" },
+                { name: 'WindSong',             value: "'WindSong', cursive" },
+                { name: 'Meddon',               value: "'Meddon', cursive" }
+            ]
+        },
+        {
+            label: '✍️ Viết tay tự nhiên, phóng khoáng',
+            items: [
+                { name: 'Dancing Script',       value: "'Dancing Script', cursive" },
+                { name: 'Great Vibes',          value: "'Great Vibes', cursive" },
+                { name: 'Caveat',               value: "'Caveat', cursive" },
+                { name: 'Satisfy',              value: "'Satisfy', cursive" },
+                { name: 'Kalam',                value: "'Kalam', cursive" },
+                { name: 'Shadows Into Light',   value: "'Shadows Into Light', cursive" },
+                { name: 'Homemade Apple',       value: "'Homemade Apple', cursive" },
+                { name: 'Marck Script',         value: "'Marck Script', cursive" },
+                { name: 'Sacramento',           value: "'Sacramento', cursive" },
+                { name: 'Parisienne',           value: "'Parisienne', cursive" },
+                { name: 'Yellowtail',           value: "'Yellowtail', cursive" },
+                { name: 'Playball',             value: "'Playball', cursive" }
+            ]
+        },
+        {
+            label: '🎨 Calligraphy / trang trọng, đậm nét',
+            items: [
+                { name: 'Italianno',            value: "'Italianno', cursive" },
+                { name: 'Kaushan Script',       value: "'Kaushan Script', cursive" },
+                { name: 'Pacifico',             value: "'Pacifico', cursive" },
+                { name: 'Lobster',              value: "'Lobster', cursive" },
+                { name: 'Miss Fajardose',       value: "'Miss Fajardose', cursive" },
+                { name: 'Sassy Frass',          value: "'Sassy Frass', cursive" }
+            ]
+        }
+    ];
+    // Danh sách phẳng (dùng để tra cứu font mặc định, v.v.)
+    const fonts = fontGroups.flatMap(g => g.items);
+    const colors = ['#000000', '#1e40af', '#7c3aed', '#dc2626', '#ea580c', '#16a34a', '#0891b2', '#db2777'];
+
+    let currentMode = 'upload';
+    let signatureText = '';
+    let fontSize = 48;
+    let fontFamily = fonts[0].value;
+    let currentColor = '#000000';
+    let brushSize = 3;
+
+    // Vẽ tay: lưu từng nét (stroke) riêng biệt để không bị xoá khi nhấc chuột vẽ nét mới
+    let isDrawing = false;
+    let drawPixelRatio = 1; // tỉ lệ giữa độ phân giải canvas thật và kích thước CSS hiển thị - dùng để cỡ bút luôn đúng thị giác dù màn hình nào
+    let strokes = [];          // các nét đã hoàn thành
+    let currentStroke = [];    // nét đang vẽ dở
+
+    let cropper = null;
+    let originalImageData = null;
+    let processedCanvas = null;
+    let history = [];
+    let historyIndex = -1;
+
+    // Tuỳ chọn xuất ảnh
+    let exportBackground = 'transparent'; // 'transparent' | 'white'
+    let exportFormat = 'png';             // 'png' | 'jpg'
+    let autoBtnTimeout = null;
+
+    const textInput = document.getElementById('signature-text-input');
+    const fontSelect = document.getElementById('font-family-select');
+    const fontSizeSlider = document.getElementById('font-size-slider');
+    const fontSizeValue = document.getElementById('font-size-value');
+    const brushSizeSlider = document.getElementById('brush-size-slider');
+    const brushSizeValue = document.getElementById('brush-size-value');
+    const beautifyToggle = document.getElementById('beautify-toggle');
+    const textCanvas = document.getElementById('text-canvas');
+    const drawCanvas = document.getElementById('draw-canvas');
+    const drawCanvasWrapper = document.getElementById('draw-canvas-wrapper');
+    const uploadCanvas = document.getElementById('upload-canvas');
+    const textCtx = textCanvas.getContext('2d');
+    const drawCtx = drawCanvas.getContext('2d');
+    const uploadCtx = uploadCanvas.getContext('2d');
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    const uploadInput = document.getElementById('signature-upload-input');
+    const imageToCrop = document.getElementById('image-to-crop');
+    const processCropBtn = document.getElementById('process-crop-btn');
+    const openCameraBtn = document.getElementById('open-camera-btn');
+    const cameraModal = document.getElementById('camera-modal');
+    const cameraModalCloseBtn = document.getElementById('camera-modal-close-btn');
+    const cameraMountPoint = document.getElementById('camera-mount-point');
+    const cameraMessageBox = document.getElementById('camera-message-box');
+    const cameraMessageText = document.getElementById('camera-message-text');
+    const cameraMessageCloseBtn = document.getElementById('camera-message-close-btn');
+    let cameraEl = null; // instance <camera-scanner> hiện tại, null khi modal đang đóng
+    const autoOptimizeBtn = document.getElementById('auto-optimize-btn');
+    const thresholdSlider = document.getElementById('threshold-slider');
+    const thresholdValue = document.getElementById('threshold-value');
+    const featherSlider = document.getElementById('feather-slider');
+    const featherValue = document.getElementById('feather-value');
+    const autoThresholdBtn = document.getElementById('auto-threshold-btn');
+    const noiseFilterToggle = document.getElementById('noise-filter-toggle');
+    const autoTrimToggle = document.getElementById('autotrim-toggle');
+    const blurSlider = document.getElementById('blur-slider');
+    const blurValue = document.getElementById('blur-value');
+    const contrastSlider = document.getElementById('contrast-slider');
+    const contrastValue = document.getElementById('contrast-value');
+    const mainDownloadBtn = document.getElementById('main-download-btn');
+    const undoBtn = document.getElementById('undo-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const bgTransparentBtn = document.getElementById('bg-transparent-btn');
+    const bgWhiteBtn = document.getElementById('bg-white-btn');
+    const formatPngBtn = document.getElementById('format-png-btn');
+    const formatJpgBtn = document.getElementById('format-jpg-btn');
+    const actionButtonsBar = document.getElementById('action-buttons-bar');
+
+    // Thư viện chữ ký
+    const saveLibraryBtn = document.getElementById('save-library-btn');
+    const saveLibraryModal = document.getElementById('save-library-modal');
+    const saveModalTitle = document.getElementById('save-modal-title');
+    const saveModalSubtitle = document.getElementById('save-modal-subtitle');
+    const saveAsNewLink = document.getElementById('save-as-new-link');
+    const libUnitInput = document.getElementById('lib-unit-input');
+    const libNameInput = document.getElementById('lib-name-input');
+    const libNoteInput = document.getElementById('lib-note-input');
+    const unitDatalist = document.getElementById('unit-datalist');
+    const nameDatalist = document.getElementById('name-datalist');
+    const saveLibraryCancelBtn = document.getElementById('save-library-cancel-btn');
+    const saveLibraryConfirmBtn = document.getElementById('save-library-confirm-btn');
+    const librarySearchInput = document.getElementById('library-search');
+    const libraryListEl = document.getElementById('library-list');
+    const libraryEmptyEl = document.getElementById('library-empty');
+    const exportLibraryBtn = document.getElementById('export-library-btn');
+    const importLibraryInput = document.getElementById('import-library-input');
+    const clearLibraryBtn = document.getElementById('clear-library-btn');
+    const usbConnectRow = document.getElementById('usb-connect-row');
+    const connectOpenBtn = document.getElementById('connect-open-btn');
+    const connectNewBtn = document.getElementById('connect-new-btn');
+    const disconnectUsbBtn = document.getElementById('disconnect-usb-btn');
+    const usbStatusEl = document.getElementById('usb-status');
+
+    const FS_ACCESS_SUPPORTED = ('showOpenFilePicker' in window) && ('showSaveFilePicker' in window);
+    let libraryFileHandle = null;
+    let libraryFileName = '';
+
+    const MODES = ['upload', 'text', 'draw', 'library'];
+    const LIBRARY_STORAGE_KEY = 'chukyso_library_v1';
+    let library = [];
+    let pendingSaveCanvas = null;
+    let editingLibraryId = null;   // id của bản ghi đang được nạp lại để sửa ảnh (từ nút "Mở")
+    let editInfoTargetId = null;   // id của bản ghi chỉ đang sửa tên/ghi chú (từ nút "Sửa")
+    let saveModalMode = 'new';     // 'new' | 'update' | 'editInfo'
+
+    /* =========================================================
+       KHỞI TẠO
+    ========================================================= */
+    function init() {
+        loadLibraryFromStorage();
+        setupFonts();
+        setupColorPalettes();
+        setupEventListeners();
+        switchTab('upload');
+        renderTextSignature();
+        updateExportButtons();
+        updateUsbStatus();
+
+        // Co cửa sổ / xoay màn hình lúc đang ở tab Vẽ Tay -> đồng bộ lại độ phân giải canvas cho khớp khung mới
+        let resizeTimer = null;
+        window.addEventListener('resize', () => {
+            if (currentMode !== 'draw') return;
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(resizeDrawCanvas, 150);
+        });
+    }
+
+    function setupFonts() {
+        fontGroups.forEach(group => {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = group.label;
+            group.items.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f.value;
+                opt.textContent = f.name;
+                opt.style.fontFamily = f.value;
+                optgroup.appendChild(opt);
+            });
+            fontSelect.appendChild(optgroup);
+        });
+    }
+
+    function setupColorPalettes() {
+        ['upload', 'text', 'draw'].forEach(mode => {
+            const container = document.getElementById('color-palette-' + mode);
+            colors.forEach(c => {
+                const btn = document.createElement('button');
+                btn.className = 'w-10 h-10 rounded-full border-2 border-gray-300 hover:scale-110 transition-transform';
+                btn.style.backgroundColor = c;
+                btn.onclick = () => {
+                    currentColor = c;
+                    if (mode === 'upload' && processedCanvas) changeSignatureColor(c);
+                    if (mode === 'text') renderTextSignature();
+                    updateColorSelection();
+                };
+                container.appendChild(btn);
+            });
+        });
+        updateColorSelection();
+    }
+
+    function setupEventListeners() {
+        tabBtns.forEach((btn, i) => {
+            btn.onclick = () => switchTab(MODES[i]);
+        });
+
+        textInput.oninput = e => { signatureText = e.target.value; renderTextSignature(); };
+        fontSelect.onchange = e => { fontFamily = e.target.value; renderTextSignature(); };
+        fontSizeSlider.oninput = e => {
+            fontSize = e.target.value;
+            fontSizeValue.textContent = fontSize;
+            renderTextSignature();
+        };
+
+        drawCanvas.addEventListener('mousedown', startDrawing);
+        drawCanvas.addEventListener('mousemove', draw);
+        drawCanvas.addEventListener('mouseup', stopDrawing);
+        drawCanvas.addEventListener('mouseleave', stopDrawing);
+        drawCanvas.addEventListener('touchstart', startDrawing);
+        drawCanvas.addEventListener('touchmove', draw);
+        drawCanvas.addEventListener('touchend', stopDrawing);
+
+        brushSizeSlider.oninput = e => {
+            brushSize = e.target.value;
+            brushSizeValue.textContent = brushSize;
+        };
+        beautifyToggle.onchange = () => redrawAll();
+
+        uploadInput.onchange = handleImageUpload;
+        processCropBtn.onclick = processSignature;
+        openCameraBtn.onclick = openCameraModal;
+        cameraModalCloseBtn.onclick = closeCameraModal;
+        cameraMessageCloseBtn.onclick = closeCameraModal;
+        autoOptimizeBtn.onclick = () => { if (cropper) autoOptimize(); };
+
+        thresholdSlider.oninput = e => {
+            thresholdValue.textContent = e.target.value;
+            if (cropper && originalImageData) processSignature();
+        };
+        featherSlider.oninput = e => {
+            featherValue.textContent = e.target.value;
+            if (cropper && originalImageData) processSignature();
+        };
+        autoThresholdBtn.onclick = () => { if (cropper) autoDetectThreshold(true); };
+
+        blurSlider.oninput = e => {
+            blurValue.textContent = e.target.value;
+            if (cropper && originalImageData) processSignature();
+        };
+        contrastSlider.oninput = e => {
+            contrastValue.textContent = e.target.value;
+            if (cropper && originalImageData) processSignature();
+        };
+        noiseFilterToggle.onchange = () => { if (cropper && originalImageData) processSignature(); };
+        autoTrimToggle.onchange = () => { if (cropper && originalImageData) processSignature(); };
+
+        mainDownloadBtn.onclick = () => downloadSignature();
+        undoBtn.onclick = undo;
+        clearBtn.onclick = clearCanvas;
+
+        document.querySelectorAll('.download-res-btn').forEach(btn => {
+            btn.onclick = e => {
+                const size = e.target.dataset.size;
+                downloadSignature(size === 'original' ? null : parseInt(size));
+            };
+        });
+
+        bgTransparentBtn.onclick = () => { exportBackground = 'transparent'; updateExportButtons(); };
+        bgWhiteBtn.onclick = () => { exportBackground = 'white'; updateExportButtons(); };
+        formatPngBtn.onclick = () => { exportFormat = 'png'; updateExportButtons(); };
+        formatJpgBtn.onclick = () => { exportFormat = 'jpg'; exportBackground = 'white'; updateExportButtons(); };
+
+        saveLibraryBtn.onclick = openSaveLibraryModal;
+        saveLibraryCancelBtn.onclick = closeSaveLibraryModal;
+        saveLibraryConfirmBtn.onclick = confirmSaveLibrary;
+        saveAsNewLink.onclick = switchModalToNewMode;
+        libNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') confirmSaveLibrary(); });
+        librarySearchInput.oninput = renderLibrary;
+        exportLibraryBtn.onclick = exportLibraryJson;
+        clearLibraryBtn.onclick = clearLibrary;
+        connectOpenBtn.onclick = connectExistingUsbFile;
+        connectNewBtn.onclick = connectNewUsbFile;
+        disconnectUsbBtn.onclick = disconnectUsbFile;
+        if (FS_ACCESS_SUPPORTED) usbConnectRow.classList.remove('hidden');
+        importLibraryInput.onchange = e => {
+            const file = e.target.files[0];
+            if (file) importLibraryJson(file);
+            e.target.value = '';
+        };
+    }
+
+    function updateExportButtons() {
+        bgTransparentBtn.classList.toggle('active', exportBackground === 'transparent');
+        bgWhiteBtn.classList.toggle('active', exportBackground === 'white');
+        formatPngBtn.classList.toggle('active', exportFormat === 'png');
+        formatJpgBtn.classList.toggle('active', exportFormat === 'jpg');
+        // JPG không hỗ trợ trong suốt -> khoá lựa chọn "Trong suốt" khi đang chọn JPG
+        bgTransparentBtn.disabled = exportFormat === 'jpg';
+    }
+
+    function switchTab(mode) {
+        currentMode = mode;
+        tabBtns.forEach((btn, i) => {
+            const active = MODES[i] === mode;
+            btn.className = 'tab-btn flex-1 px-4 py-3 rounded-lg font-medium transition-all ' +
+                (active ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg' : 'bg-white text-gray-600');
+        });
+        tabContents.forEach((content, i) => {
+            content.classList.toggle('hidden', MODES[i] !== mode);
+        });
+        actionButtonsBar.classList.toggle('hidden', mode === 'library');
+        if (mode === 'library') renderLibrary();
+        if (mode === 'draw') resizeDrawCanvas(); // lúc này khung mới thực sự có kích thước (tab vừa hiện ra) nên đo & đồng bộ canvas ngay
+        updateUndoButton();
+    }
+
+    function updateColorSelection() {
+        document.querySelectorAll('[id^="color-palette-"] button').forEach(btn => {
+            const match = btn.style.backgroundColor === currentColor || rgbToHex(btn.style.backgroundColor) === currentColor;
+            btn.style.borderColor = match ? currentColor : '#d1d5db';
+            btn.style.borderWidth = match ? '3px' : '2px';
+            btn.style.transform = match ? 'scale(1.1)' : 'scale(1)';
+        });
+    }
+
+    /* =========================================================
+       CHẾ ĐỘ GÕ CHỮ
+    ========================================================= */
+    function renderTextSignature() {
+        textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+        if (signatureText.trim()) {
+            textCtx.font = fontSize + 'px ' + fontFamily;
+            textCtx.fillStyle = currentColor;
+            textCtx.textAlign = 'center';
+            textCtx.textBaseline = 'middle';
+            textCtx.fillText(signatureText, textCanvas.width / 2, textCanvas.height / 2);
+        }
+    }
+
+    /* =========================================================
+       CHẾ ĐỘ VẼ TAY - hỗ trợ nhiều nét + làm đẹp tự nhiên
+    ========================================================= */
+
+    // Đồng bộ độ phân giải thật của canvas khớp CHÍNH XÁC với kích thước khung đang hiển thị (CSS).
+    // Nhờ vậy khung hiển thị hình gì thì ảnh lưu ra đúng y hệt hình đó, không bao giờ bị méo/dãn -
+    // dù khung có chiều cao/tỉ lệ khác nhau tuỳ màn hình (điện thoại, tablet, desktop).
+    function resizeDrawCanvas() {
+        const rect = drawCanvasWrapper.getBoundingClientRect();
+        if (rect.width < 2 || rect.height < 2) return; // khung đang ẩn (tab chưa active) -> bỏ qua, sẽ gọi lại khi tab hiện ra
+
+        const dpr = Math.min(window.devicePixelRatio || 1, 2); // giới hạn 2x để tránh canvas quá nặng trên máy màn hình siêu nét
+        const newW = Math.max(1, Math.round(rect.width * dpr));
+        const newH = Math.max(1, Math.round(rect.height * dpr));
+        if (newW === drawCanvas.width && newH === drawCanvas.height) return; // không đổi -> khỏi vẽ lại
+
+        const oldW = drawCanvas.width, oldH = drawCanvas.height;
+        if (oldW > 0 && oldH > 0) {
+            // Co giãn lại các nét đã vẽ theo đúng tỉ lệ mới, để không bị mất/méo hình khi đổi kích thước khung
+            const scaleX = newW / oldW, scaleY = newH / oldH;
+            const scalePoints = pts => pts.forEach(p => { p.x *= scaleX; p.y *= scaleY; });
+            strokes.forEach(scalePoints);
+            scalePoints(currentStroke);
+        }
+
+        drawCanvas.width = newW;
+        drawCanvas.height = newH;
+        drawPixelRatio = dpr;
+        redrawAll();
+    }
+
+    function startDrawing(e) {
+        isDrawing = true;
+        currentStroke = [getCanvasPoint(e, drawCanvas)];
+    }
+
+    function draw(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
+        currentStroke.push(getCanvasPoint(e, drawCanvas));
+        redrawAll();
+    }
+
+    function stopDrawing() {
+        if (isDrawing && currentStroke.length > 1) {
+            strokes.push(currentStroke);
+        }
+        isDrawing = false;
+        currentStroke = [];
+        redrawAll();
+        updateUndoButton();
+    }
+
+    // Vẽ lại toàn bộ các nét đã có + nét đang vẽ dở, không xoá mất nét cũ khi bắt đầu nét mới
+    function redrawAll() {
+        drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        const beautify = beautifyToggle.checked;
+        strokes.forEach(s => renderStroke(drawCtx, s, brushSize, currentColor, beautify));
+        if (currentStroke.length) renderStroke(drawCtx, currentStroke, brushSize, currentColor, beautify);
+    }
+
+    // Làm mượt các điểm bằng bộ lọc trung bình trượt (giảm rung tay khi vẽ bằng chuột)
+    function smoothStrokePoints(points, passes) {
+        if (points.length < 3) return points.slice();
+        let pts = points.map(p => ({ x: p.x, y: p.y }));
+        for (let pass = 0; pass < passes; pass++) {
+            const next = [pts[0]];
+            for (let i = 1; i < pts.length - 1; i++) {
+                next.push({
+                    x: (pts[i - 1].x + pts[i].x * 2 + pts[i + 1].x) / 4,
+                    y: (pts[i - 1].y + pts[i].y * 2 + pts[i + 1].y) / 4
+                });
+            }
+            next.push(pts[pts.length - 1]);
+            pts = next;
+        }
+        return pts;
+    }
+
+    // Vẽ một nét với độ dày biến thiên (thon 2 đầu, hơi đậm ở giữa, mảnh khi vẽ nhanh)
+    // để mô phỏng cảm giác bút thật thay vì nét đều tăm tắp của chuột máy tính.
+    function renderStroke(ctx, rawPoints, baseWidth, color, beautify) {
+        if (rawPoints.length === 0) return;
+        baseWidth = parseFloat(baseWidth) * drawPixelRatio; // quy đổi cỡ bút (đơn vị CSS px) sang đúng độ phân giải thật của canvas
+
+        if (rawPoints.length === 1) {
+            ctx.beginPath();
+            ctx.fillStyle = color;
+            ctx.arc(rawPoints[0].x, rawPoints[0].y, baseWidth / 2, 0, Math.PI * 2);
+            ctx.fill();
+            return;
+        }
+
+        const pts = beautify ? smoothStrokePoints(rawPoints, 2) : rawPoints;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = color;
+
+        const n = pts.length;
+        if (!beautify) {
+            // Chế độ thô: giữ nguyên cảm giác vẽ gốc, độ dày đều
+            ctx.lineWidth = baseWidth;
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < n - 1; i++) {
+                const midX = (pts[i].x + pts[i + 1].x) / 2;
+                const midY = (pts[i].y + pts[i + 1].y) / 2;
+                ctx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY);
+            }
+            const last = pts[n - 1], prev = pts[n - 2];
+            ctx.quadraticCurveTo(prev.x, prev.y, last.x, last.y);
+            ctx.stroke();
+            return;
+        }
+
+        const taperLen = Math.max(2, Math.min(7, Math.floor(n / 4)));
+        for (let i = 0; i < n - 1; i++) {
+            const p0 = pts[i], p1 = pts[i + 1];
+            let taper = 1;
+            if (i < taperLen) taper = 0.4 + 0.6 * (i / taperLen);
+            else if (i > n - 2 - taperLen) taper = 0.4 + 0.6 * ((n - 2 - i) / taperLen);
+
+            const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+            const speedFactor = Math.max(0.6, Math.min(1.25, 1.3 - dist / 16));
+
+            const width = Math.max(0.8, baseWidth * taper * speedFactor);
+            ctx.lineWidth = width;
+            ctx.beginPath();
+            ctx.moveTo(p0.x, p0.y);
+            ctx.lineTo(p1.x, p1.y);
+            ctx.stroke();
+        }
+    }
+
+    function getCanvasPoint(e, canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return {
+            x: (clientX - rect.left) * (canvas.width / rect.width),
+            y: (clientY - rect.top) * (canvas.height / rect.height)
+        };
+    }
+
+    /* =========================================================
+       CHẾ ĐỘ TẢI ẢNH LÊN - XỬ LÝ NỀN
+    ========================================================= */
+    function handleImageUpload(e) {
+        const file = e.target.files[0];
+        if (!file || !file.type.startsWith('image/')) return;
+
+        const reader = new FileReader();
+        reader.onload = ev => loadImageIntoCropper(ev.target.result);
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    }
+
+    // Nạp 1 ảnh (dataURL) vào bước Cropper - dùng chung cho cả nguồn "chọn file" và "chụp trực tiếp bằng camera",
+    // để không phải viết lại 2 lần cùng một luồng xử lý.
+    function loadImageIntoCropper(dataUrl) {
+        editingLibraryId = null; // ảnh mới -> không còn liên kết cập nhật bản ghi thư viện cũ
+        imageToCrop.src = dataUrl;
+        document.getElementById('upload-initial-view').style.display = 'none';
+        document.getElementById('cropper-container').style.display = 'block';
+
+        if (cropper) cropper.destroy();
+        cropper = new Cropper(imageToCrop, {
+            viewMode: 1,
+            background: false,
+            autoCropArea: 0.9,
+            responsive: true,
+            checkOrientation: false
+        });
+
+        // Ước lượng ngưỡng ban đầu bằng thuật toán Otsu (chính xác hơn giá trị trung bình đơn giản)
+        const probe = new Image();
+        probe.onload = () => {
+            const c = document.createElement('canvas');
+            c.width = probe.width;
+            c.height = probe.height;
+            const ctx = c.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(probe, 0, 0);
+            const id = ctx.getImageData(0, 0, c.width, c.height);
+            const t = otsuThreshold(id);
+            thresholdSlider.value = t;
+            thresholdValue.textContent = t;
+        };
+        probe.src = dataUrl;
+    }
+
+    /* =========================================================
+       CHỤP TRỰC TIẾP BẰNG CAMERA (camera.js - <camera-scanner>)
+       Camera chỉ đóng vai trò "nguồn ảnh" thứ 2 - ảnh chụp được nạp thẳng vào
+       đúng bước Cropper.js như ảnh chọn từ file, dùng chung toàn bộ pipeline xử lý phía sau.
+    ========================================================= */
+    const CAMERA_ERROR_MESSAGES = {
+        PERMISSION_DENIED: 'Bạn chưa cấp quyền truy cập camera cho trang này. Hãy vào cài đặt trình duyệt để cấp quyền rồi thử lại, hoặc dùng nút "Chọn Ảnh Có Sẵn".',
+        NOT_FOUND: 'Không tìm thấy camera trên thiết bị này. Hãy dùng nút "Chọn Ảnh Có Sẵn" thay thế.',
+        IN_USE: 'Camera đang được một ứng dụng hoặc tab khác sử dụng. Hãy đóng ứng dụng đó rồi thử lại.',
+        NOT_SUPPORTED: 'Trình duyệt này không hỗ trợ chụp ảnh trực tiếp. Hãy dùng nút "Chọn Ảnh Có Sẵn" thay thế.',
+        HTTPS_REQUIRED: 'Cần mở trang qua HTTPS (hoặc trực tiếp từ file trên máy) để dùng được camera.',
+        IN_APP_BROWSER: 'Trình duyệt trong ứng dụng (Zalo, Facebook, Instagram...) không hỗ trợ camera. Hãy mở app này bằng Chrome hoặc Safari.',
+        CONSTRAINT_ERROR: 'Không thể khởi động camera với cấu hình hiện tại, đang tự thử lại...',
+        STREAM_ENDED: 'Camera bị ngắt kết nối, đang tự kết nối lại...'
+    };
+
+    function isCameraLibAvailable() {
+        return !!(window.customElements && customElements.get('camera-scanner'));
+    }
+
+    // Mở qua content:// (thường do bấm mở file từ Trình quản lý tệp / Thư viện ảnh trên Android)
+    // là một "luồng dữ liệu đơn lẻ", không có khái niệm thư mục cùng cấp như file:// thật -
+    // nên camera.js dù copy đúng chỗ vẫn không đọc được. Cần phát hiện riêng để hướng dẫn đúng cách.
+    function isOpenedViaContentUri() {
+        return location.protocol === 'content:' || location.href.indexOf('content://') === 0;
+    }
+
+    function openCameraModal() {
+        if (!isCameraLibAvailable()) {
+            cameraModal.classList.remove('hidden');
+            if (isOpenedViaContentUri()) {
+                showCameraMessage(
+                    'Trang đang được mở qua "content://" (thường do bấm mở file từ Trình quản lý tệp / Thư viện ảnh trên điện thoại). ' +
+                    'Kiểu đường dẫn này không đọc được file "camera.js" nằm cùng thư mục, dù bạn đã copy đúng chỗ.\n\n' +
+                    'Cách khắc phục: mở Chrome, dán trực tiếp đường dẫn file:// của file HTML này vào thanh địa chỉ ' +
+                    '(ví dụ: file:///storage/emulated/0/Download/ten-thu-muc/ten-file.html) thay vì bấm mở từ ứng dụng khác. ' +
+                    'Trong lúc chờ, vẫn dùng được nút "Chọn Ảnh Có Sẵn" bình thường.',
+                    true
+                );
+            } else {
+                showCameraMessage(
+                    'Chức năng chụp trực tiếp chưa sẵn sàng: thiếu file "camera.js" cùng thư mục với app này. ' +
+                    'Hãy dùng nút "Chọn Ảnh Có Sẵn" thay thế, hoặc bổ sung file camera.js rồi mở lại app.',
+                    true
+                );
+            }
+            return;
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            cameraModal.classList.remove('hidden');
+            showCameraMessage(
+                'Trình duyệt hoặc thiết bị này không hỗ trợ truy cập camera. Hãy dùng nút "Chọn Ảnh Có Sẵn" thay thế.',
+                true
+            );
+            return;
+        }
+
+        cameraModal.classList.remove('hidden');
+        hideCameraMessage();
+        mountCameraScanner();
+    }
+
+    function mountCameraScanner() {
+        unmountCameraScanner(); // đề phòng còn sót instance cũ
+
+        cameraEl = document.createElement('camera-scanner');
+        cameraEl.setAttribute('frame', 'square');
+        cameraEl.setAttribute('frame-color', '#7c3aed');
+        cameraEl.setAttribute('show-grid', 'true');
+        cameraEl.setAttribute('show-guide', 'true');
+        cameraEl.setAttribute('auto-capture', 'true');
+        cameraEl.setAttribute('sharpness-threshold', '78');
+        cameraEl.setAttribute('sharpness-bar', 'true');
+        cameraEl.setAttribute('output', 'base64');
+        cameraEl.setAttribute('max-width', '1600');
+        cameraEl.setAttribute('quality', '0.95');
+        cameraEl.setAttribute('crop-to-frame', 'true');
+        cameraEl.setAttribute('facing', 'environment');
+        cameraEl.setAttribute('hint', 'Đặt chữ ký vào khung, giữ điện thoại thẳng, đủ sáng');
+        cameraEl.setAttribute('ui', 'true');
+        cameraEl.setAttribute('hide-controls', 'flip');
+
+        cameraEl.addEventListener('camera-result', onCameraResult);
+        cameraEl.addEventListener('camera-error', onCameraError);
+
+        cameraMountPoint.appendChild(cameraEl);
+    }
+
+    function unmountCameraScanner() {
+        if (!cameraEl) return;
+        try { cameraEl.stop && cameraEl.stop(); } catch (e) { /* thư viện có thể chưa kịp khởi tạo xong, bỏ qua */ }
+        cameraEl.removeEventListener('camera-result', onCameraResult);
+        cameraEl.removeEventListener('camera-error', onCameraError);
+        if (cameraEl.parentNode) cameraEl.parentNode.removeChild(cameraEl);
+        cameraEl = null;
+    }
+
+    function closeCameraModal() {
+        unmountCameraScanner(); // giải phóng stream camera ngay khi đóng, tránh giữ camera chạy ngầm tốn pin
+        cameraModal.classList.add('hidden');
+        hideCameraMessage();
+    }
+
+    function onCameraResult(e) {
+        const dataUrl = e.detail && e.detail.dataUrl;
+        if (!dataUrl) return;
+        closeCameraModal();
+        loadImageIntoCropper(dataUrl);
+    }
+
+    function onCameraError(e) {
+        const detail = e.detail || {};
+        const msg = CAMERA_ERROR_MESSAGES[detail.code] || (detail.message || 'Có lỗi xảy ra khi mở camera.');
+        // Lỗi có recoverable=true (vd CONSTRAINT_ERROR, STREAM_ENDED) thì thư viện tự thử lại -> không cần nút đóng gấp
+        showCameraMessage(msg, !detail.recoverable);
+    }
+
+    function showCameraMessage(text, withCloseAction) {
+        cameraMessageText.textContent = text;
+        cameraMessageBox.classList.remove('hidden');
+        cameraMessageCloseBtn.classList.toggle('hidden', !withCloseAction);
+    }
+
+    function hideCameraMessage() {
+        cameraMessageBox.classList.add('hidden');
+    }
+
+    // Nút hành động chính của tab Tải Ảnh: 1 chạm ra ngay kết quả tối ưu, không cần bấm thêm lần nào nữa
+    function autoOptimize() {
+        const c = cropper.getCroppedCanvas();
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        const id = ctx.getImageData(0, 0, c.width, c.height);
+        const t = otsuThreshold(id);
+
+        thresholdSlider.value = t;
+        thresholdValue.textContent = t;
+        featherSlider.value = 22;
+        featherValue.textContent = 22;
+        blurSlider.value = 0;
+        blurValue.textContent = 0;
+        contrastSlider.value = 0;
+        contrastValue.textContent = 0;
+        noiseFilterToggle.checked = true;
+        autoTrimToggle.checked = true;
+
+        processSignature();
+
+        // Hiệu ứng phản hồi trực quan cho biết đã tối ưu xong
+        autoOptimizeBtn.classList.add('is-done');
+        autoOptimizeBtn.textContent = '✓ Đã Tối Ưu Xong!';
+        clearTimeout(autoBtnTimeout);
+        autoBtnTimeout = setTimeout(() => {
+            autoOptimizeBtn.classList.remove('is-done');
+            autoOptimizeBtn.textContent = '⚡ Tối Ưu Tự Động (1 chạm)';
+        }, 1600);
+    }
+
+    function autoDetectThreshold(reprocess) {
+        if (!cropper) return;
+        const c = cropper.getCroppedCanvas();
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        const id = ctx.getImageData(0, 0, c.width, c.height);
+        const t = otsuThreshold(id);
+        thresholdSlider.value = t;
+        thresholdValue.textContent = t;
+        if (reprocess) processSignature();
+    }
+
+    // Thuật toán Otsu: tìm ngưỡng tách nét chữ (tối) khỏi nền (sáng) tối ưu nhất
+    function otsuThreshold(imageData) {
+        const data = imageData.data;
+        const hist = new Array(256).fill(0);
+        let total = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i + 3] < 10) continue;
+            const lum = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+            hist[lum]++;
+            total++;
+        }
+        if (total === 0) return 128;
+        let sum = 0;
+        for (let t = 0; t < 256; t++) sum += t * hist[t];
+        let sumB = 0, wB = 0, maxVar = 0, threshold = 128;
+        for (let t = 0; t < 256; t++) {
+            wB += hist[t];
+            if (wB === 0) continue;
+            const wF = total - wB;
+            if (wF === 0) break;
+            sumB += t * hist[t];
+            const mB = sumB / wB;
+            const mF = (sum - sumB) / wF;
+            const varBetween = wB * wF * (mB - mF) * (mB - mF);
+            if (varBetween > maxVar) { maxVar = varBetween; threshold = t; }
+        }
+        return threshold;
+    }
+
+    function processSignature() {
+        if (!cropper) return;
+        history = [];
+        historyIndex = -1;
+
+        const croppedCanvas = cropper.getCroppedCanvas({ imageSmoothingEnabled: true, imageSmoothingQuality: 'high' });
+        originalImageData = croppedCanvas.getContext('2d', { willReadFrequently: true })
+            .getImageData(0, 0, croppedCanvas.width, croppedCanvas.height);
+
+        let imgData = new ImageData(new Uint8ClampedArray(originalImageData.data), originalImageData.width, originalImageData.height);
+
+        const threshold = parseInt(thresholdSlider.value);
+        const feather = parseInt(featherSlider.value);
+        removeBackgroundSoft(imgData, threshold, feather);
+
+        const blurAmt = parseFloat(blurSlider.value);
+        if (blurAmt > 0) imgData = applyEdgeBlur(imgData, blurAmt);
+
+        if (noiseFilterToggle.checked) imgData = removeNoiseSpeckles(imgData);
+
+        const contrastAmt = parseInt(contrastSlider.value);
+        if (contrastAmt > 0) applyContrastCurve(imgData, contrastAmt);
+
+        imgData = cleanIsolatedPixels(imgData);
+
+        if (autoTrimToggle.checked) imgData = trimTransparent(imgData, 14);
+
+        saveToHistory(imgData);
+        displayResult(imgData);
+        document.getElementById('upload-color-container').classList.remove('hidden');
+        document.getElementById('download-options').classList.remove('hidden');
+    }
+
+    // Lọc nền "mềm": vùng gần ngưỡng được nội suy alpha mượt (smoothstep) thay vì cắt cứng 0/255
+    // -> viền chữ ký không bị răng cưa, giữ được độ mượt tự nhiên của nét bút / nét quét.
+    function removeBackgroundSoft(imageData, threshold, feather) {
+        const data = imageData.data;
+        const lo = Math.max(0, threshold - feather);
+        const hi = Math.min(255, threshold + feather);
+        const span = Math.max(1, hi - lo);
+        for (let i = 0; i < data.length; i += 4) {
+            const origAlpha = data[i + 3];
+            if (origAlpha < 10) { data[i + 3] = 0; continue; }
+            const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+            let t;
+            if (lum <= lo) t = 1;
+            else if (lum >= hi) t = 0;
+            else {
+                const x = (hi - lum) / span;
+                t = x * x * (3 - 2 * x); // smoothstep
+            }
+            data[i + 3] = Math.round(255 * t * (origAlpha / 255));
+        }
+    }
+
+    // Làm mờ nhẹ kênh alpha để khử răng cưa còn sót (KHÔNG ép nhị phân lại sau khi blur,
+    // đây là lỗi khiến bản gốc bị vỡ nét dù đã "làm mịn").
+    function applyEdgeBlur(imageData, amount) {
+        const src = document.createElement('canvas');
+        src.width = imageData.width; src.height = imageData.height;
+        src.getContext('2d').putImageData(imageData, 0, 0);
+
+        const out = document.createElement('canvas');
+        out.width = imageData.width; out.height = imageData.height;
+        const outCtx = out.getContext('2d');
+        outCtx.filter = 'blur(' + amount + 'px)';
+        outCtx.drawImage(src, 0, 0);
+        return outCtx.getImageData(0, 0, out.width, out.height);
+    }
+
+    // Xoá các đốm nhiễu nhỏ rời rạc (bụi, hạt scan) bằng flood-fill, không đụng vào nét chữ ký thật
+    function removeNoiseSpeckles(imageData) {
+        const { width, height, data } = imageData;
+        const visited = new Uint8Array(width * height);
+        const minSize = Math.max(6, Math.floor((width * height) / 6000));
+        const neighbors = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const idx = y * width + x;
+                if (visited[idx] || data[idx * 4 + 3] <= 80) continue;
+
+                const stack = [[x, y]];
+                visited[idx] = 1;
+                const pixels = [];
+                while (stack.length) {
+                    const [cx, cy] = stack.pop();
+                    pixels.push([cx, cy]);
+                    for (const [dx, dy] of neighbors) {
+                        const nx = cx + dx, ny = cy + dy;
+                        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                            const nidx = ny * width + nx;
+                            if (!visited[nidx] && data[nidx * 4 + 3] > 80) {
+                                visited[nidx] = 1;
+                                stack.push([nx, ny]);
+                            }
+                        }
+                    }
+                }
+                if (pixels.length < minSize) {
+                    pixels.forEach(([px, py]) => { data[(py * width + px) * 4 + 3] = 0; });
+                }
+            }
+        }
+        return imageData;
+    }
+
+    // Tăng độ đậm / tương phản cho nét mực (áp dụng cho cả màu và alpha của điểm ảnh có nội dung)
+    function applyContrastCurve(imageData, amount) {
+        const factor = (259 * (amount * 3 + 255)) / (255 * (259 - amount * 3));
+        const data = imageData.data;
+        const clamp = v => Math.max(0, Math.min(255, v));
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i + 3] === 0) continue;
+            data[i] = clamp(factor * (data[i] - 128) + 128);
+            data[i + 1] = clamp(factor * (data[i + 1] - 128) + 128);
+            data[i + 2] = clamp(factor * (data[i + 2] - 128) + 128);
+            data[i + 3] = clamp(factor * (data[i + 3] - 128) + 128);
+        }
+    }
+
+    // Xoá điểm ảnh mờ đơn lẻ gần như cô lập (không có hàng xóm) để viền sạch hơn
+    function cleanIsolatedPixels(imageData) {
+        const { width, height, data } = imageData;
+        const out = new Uint8ClampedArray(data);
+        for (let y = 1; y < height - 1; y++) {
+            for (let x = 1; x < width - 1; x++) {
+                const idx = (y * width + x) * 4;
+                if (data[idx + 3] === 0) continue;
+                let opaqueNeighbors = 0;
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nidx = ((y + dy) * width + (x + dx)) * 4;
+                        if (data[nidx + 3] > 60) opaqueNeighbors++;
+                    }
+                }
+                if (opaqueNeighbors < 2) out[idx + 3] = 0;
+            }
+        }
+        return new ImageData(out, width, height);
+    }
+
+    // Cắt bỏ vùng trong suốt thừa quanh chữ ký, chỉ giữ lại lề đệm nhỏ (padding)
+    function trimTransparent(imageData, padding) {
+        padding = padding || 10;
+        const { width, height, data } = imageData;
+        let minX = width, minY = height, maxX = -1, maxY = -1;
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                if (data[(y * width + x) * 4 + 3] > 8) {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+        if (maxX < 0) return imageData; // không có nội dung -> giữ nguyên
+
+        minX = Math.max(0, minX - padding);
+        minY = Math.max(0, minY - padding);
+        maxX = Math.min(width - 1, maxX + padding);
+        maxY = Math.min(height - 1, maxY + padding);
+
+        const newW = maxX - minX + 1, newH = maxY - minY + 1;
+        const c = document.createElement('canvas');
+        c.width = newW; c.height = newH;
+        const ctx = c.getContext('2d');
+        ctx.putImageData(imageData, -minX, -minY);
+        return ctx.getImageData(0, 0, newW, newH);
+    }
+
+    function displayResult(imgData) {
+        const canvas = document.createElement('canvas');
+        canvas.width = imgData.width;
+        canvas.height = imgData.height;
+        canvas.getContext('2d').putImageData(imgData, 0, 0);
+        processedCanvas = canvas;
+
+        uploadCanvas.classList.remove('hidden');
+        document.getElementById('upload-placeholder').classList.add('hidden');
+
+        uploadCtx.clearRect(0, 0, uploadCanvas.width, uploadCanvas.height);
+        const scale = Math.min(uploadCanvas.width / processedCanvas.width, uploadCanvas.height / processedCanvas.height);
+        const w = processedCanvas.width * scale;
+        const h = processedCanvas.height * scale;
+        uploadCtx.imageSmoothingQuality = 'high';
+        uploadCtx.drawImage(processedCanvas, (uploadCanvas.width - w) / 2, (uploadCanvas.height - h) / 2, w, h);
+    }
+
+    function changeSignatureColor(hex) {
+        if (historyIndex < 0) return;
+        const current = history[historyIndex];
+        const newData = new ImageData(new Uint8ClampedArray(current.data), current.width, current.height);
+        const rgb = hexToRgb(hex);
+        const data = newData.data;
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i + 3] > 0) {
+                data[i] = rgb.r;
+                data[i + 1] = rgb.g;
+                data[i + 2] = rgb.b;
+            }
+        }
+        saveToHistory(newData);
+        displayResult(newData);
+    }
+
+    /* =========================================================
+       LỊCH SỬ / UNDO (áp dụng cho cả Tải Ảnh và Vẽ Tay)
+    ========================================================= */
+    function saveToHistory(imgData) {
+        history.splice(historyIndex + 1);
+        history.push(imgData);
+        historyIndex = history.length - 1;
+        updateUndoButton();
+    }
+
+    function undo() {
+        if (currentMode === 'draw') {
+            if (strokes.length > 0) {
+                strokes.pop();
+                redrawAll();
+                updateUndoButton();
+            }
+            return;
+        }
+        if (historyIndex > 0) {
+            historyIndex--;
+            displayResult(history[historyIndex]);
+            updateUndoButton();
+        }
+    }
+
+    function updateUndoButton() {
+        if (currentMode === 'draw') undoBtn.disabled = strokes.length === 0;
+        else undoBtn.disabled = historyIndex <= 0;
+    }
+
+    function clearCanvas() {
+        editingLibraryId = null; // không còn liên kết cập nhật bản ghi thư viện cũ sau khi Làm Mới
+        switch (currentMode) {
+            case 'text':
+                textInput.value = '';
+                signatureText = '';
+                renderTextSignature();
+                break;
+            case 'draw':
+                strokes = [];
+                currentStroke = [];
+                drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                updateUndoButton();
+                break;
+            case 'upload':
+                uploadCtx.clearRect(0, 0, uploadCanvas.width, uploadCanvas.height);
+                uploadCanvas.classList.add('hidden');
+                document.getElementById('upload-placeholder').classList.remove('hidden');
+                document.getElementById('upload-initial-view').style.display = 'block';
+                document.getElementById('cropper-container').style.display = 'none';
+                document.getElementById('upload-color-container').classList.add('hidden');
+                document.getElementById('download-options').classList.add('hidden');
+                if (cropper) { cropper.destroy(); cropper = null; }
+                originalImageData = null;
+                processedCanvas = null;
+                history = [];
+                historyIndex = -1;
+                updateUndoButton();
+                break;
+        }
+    }
+
+    /* =========================================================
+       TẢI XUỐNG
+    ========================================================= */
+    // Ghép nền trắng phía sau ảnh trong suốt (dùng khi chọn "Nền: Trắng" hoặc định dạng JPG)
+    function compositeOnWhite(canvas) {
+        const c = document.createElement('canvas');
+        c.width = canvas.width; c.height = canvas.height;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(canvas, 0, 0);
+        return c;
+    }
+
+    function downloadSignature(maxSize) {
+        maxSize = maxSize || null;
+        let sourceCanvas;
+        switch (currentMode) {
+            case 'text': sourceCanvas = textCanvas; break;
+            case 'draw': sourceCanvas = drawCanvas; break;
+            case 'upload': sourceCanvas = processedCanvas; break;
+        }
+        if (!sourceCanvas) return;
+
+        // Với chữ ký gõ / vẽ tay, tự động cắt viền trong suốt thừa trước khi xuất ảnh
+        let workCanvas = sourceCanvas;
+        if (currentMode === 'text' || currentMode === 'draw') {
+            const ctx = sourceCanvas.getContext('2d');
+            const id = ctx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+            const trimmed = trimTransparent(id, 12);
+            const c = document.createElement('canvas');
+            c.width = trimmed.width; c.height = trimmed.height;
+            c.getContext('2d').putImageData(trimmed, 0, 0);
+            workCanvas = c;
+        }
+
+        let finalCanvas = workCanvas;
+        if (maxSize && workCanvas.width > maxSize) {
+            const c = document.createElement('canvas');
+            const ctx = c.getContext('2d');
+            const ratio = workCanvas.height / workCanvas.width;
+            c.width = maxSize;
+            c.height = Math.round(maxSize * ratio);
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(workCanvas, 0, 0, c.width, c.height);
+            finalCanvas = c;
+        }
+
+        // JPG bắt buộc nền trắng (không hỗ trợ trong suốt)
+        const useWhiteBg = exportBackground === 'white' || exportFormat === 'jpg';
+        if (useWhiteBg) finalCanvas = compositeOnWhite(finalCanvas);
+
+        const isJpg = exportFormat === 'jpg';
+        const mime = isJpg ? 'image/jpeg' : 'image/png';
+        const ext = isJpg ? '.jpg' : '.png';
+
+        const link = document.createElement('a');
+        link.download = 'chu-ky-' + Date.now() + ext;
+        link.href = isJpg ? finalCanvas.toDataURL(mime, 0.95) : finalCanvas.toDataURL(mime);
+        link.click();
+    }
+
+    /* =========================================================
+       TIỆN ÍCH MÀU SẮC
+    ========================================================= */
+    function rgbToHex(rgb) {
+        if (!rgb || !rgb.includes('rgb')) return rgb;
+        const m = rgb.match(/\d+/g);
+        if (!m) return rgb;
+        return '#' + ((1 << 24) + (+m[0] << 16) + (+m[1] << 8) + +m[2]).toString(16).slice(1);
+    }
+
+    function hexToRgb(hex) {
+        const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : null;
+    }
+
+    /* =========================================================
+       THƯ VIỆN CHỮ KÝ
+       - localStorage: cache tạm trên máy đang dùng (KHÔNG đi theo khi đổi máy/USB)
+       - Kết nối trực tiếp file (nút Mở/Tạo File): hoạt động với file trong BẤT KỲ thư mục nào
+         trên ổ cứng PC hoặc USB, chỉ hỗ trợ Chrome/Edge (File System Access API).
+       - Xuất/Nhập .json (nút Xuất Bản Sao / Nhập Từ File): cách thủ công dùng được ở mọi trình duyệt,
+         file .json chứa sẵn cả ảnh chữ ký (base64) nên tự đủ, không cần file rời.
+    ========================================================= */
+    function loadLibraryFromStorage() {
+        try {
+            const raw = localStorage.getItem(LIBRARY_STORAGE_KEY);
+            library = raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            library = []; // trình duyệt chặn localStorage (vd chế độ riêng tư) -> vẫn chạy được, chỉ là không nhớ giữa các lần mở
+        }
+    }
+
+    function persistLibraryToStorage() {
+        try {
+            localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(library));
+        } catch (e) {
+            // Bộ nhớ đầy hoặc bị chặn -> bỏ qua, người dùng nên xuất file .json để backup
+        }
+    }
+
+    // Gọi hàm này ở MỌI nơi thư viện thay đổi (thêm/sửa/xoá/nhập):
+    // vừa cache vào localStorage của máy đang dùng, vừa tự ghi thẳng vào file trên USB nếu đã kết nối.
+    function persistLibrary() {
+        persistLibraryToStorage();
+        if (libraryFileHandle) writeLibraryToHandle();
+    }
+
+    function genId() {
+        return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    }
+
+    function mergeImportedItems(items) {
+        let added = 0;
+        items.forEach(it => {
+            if (it && it.dataUrl && it.name) {
+                const id = it.id || genId();
+                if (!library.some(e => e.id === id)) {
+                    library.push({
+                        id: id,
+                        unit: it.unit || '',
+                        name: it.name,
+                        note: it.note || '',
+                        mode: it.mode || 'upload',
+                        dataUrl: it.dataUrl,
+                        createdAt: it.createdAt || new Date().toISOString()
+                    });
+                    added++;
+                }
+            }
+        });
+        library.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        return added;
+    }
+
+    function updateUsbStatus() {
+        if (!usbStatusEl) return;
+        if (libraryFileHandle) {
+            usbStatusEl.textContent = '✅ Đã kết nối: ' + libraryFileName + ' — tự động lưu mỗi khi thay đổi';
+            disconnectUsbBtn.classList.remove('hidden');
+        } else {
+            usbStatusEl.textContent = 'Chưa kết nối file nào trên USB.';
+            disconnectUsbBtn.classList.add('hidden');
+        }
+    }
+
+    // Mở một file .json có sẵn trên USB: nạp dữ liệu trong đó vào thư viện, đồng thời
+    // giữ lại "quyền ghi" (handle) để từ nay mọi thay đổi tự lưu thẳng vào đúng file này.
+    async function connectExistingUsbFile() {
+        if (!FS_ACCESS_SUPPORTED) return;
+        try {
+            const [handle] = await window.showOpenFilePicker({
+                types: [{ description: 'Thư viện chữ ký (JSON)', accept: { 'application/json': ['.json'] } }],
+                excludeAcceptAllOption: false,
+                multiple: false
+            });
+            const perm = await handle.requestPermission({ mode: 'readwrite' });
+            if (perm !== 'granted') {
+                alert('Cần cấp quyền ghi thì mới tự động lưu vào file này được. Bạn có thể thử kết nối lại.');
+                return;
+            }
+            const file = await handle.getFile();
+            const text = await file.text();
+            let parsed = {};
+            try { parsed = text.trim() ? JSON.parse(text) : {}; } catch (e) { parsed = {}; }
+            const items = Array.isArray(parsed) ? parsed : (parsed.items || []);
+            const added = mergeImportedItems(items);
+
+            libraryFileHandle = handle;
+            libraryFileName = handle.name;
+            persistLibraryToStorage();
+            renderLibrary();
+            updateUsbStatus();
+            if (added > 0) alert('Đã nạp ' + added + ' chữ ký từ file "' + handle.name + '" và kết nối để tự lưu tiếp theo.');
+        } catch (err) {
+            if (err && err.name !== 'AbortError') console.error(err);
+        }
+    }
+
+    // Tạo mới 1 file .json trên USB (lần đầu thiết lập cho một USB mới) và kết nối luôn để tự lưu
+    async function connectNewUsbFile() {
+        if (!FS_ACCESS_SUPPORTED) return;
+        try {
+            const handle = await window.showSaveFilePicker({
+                suggestedName: 'thu-vien-chu-ky.json',
+                types: [{ description: 'Thư viện chữ ký (JSON)', accept: { 'application/json': ['.json'] } }]
+            });
+            libraryFileHandle = handle;
+            libraryFileName = handle.name;
+            await writeLibraryToHandle();
+            updateUsbStatus();
+            alert('Đã tạo file "' + handle.name + '" và kết nối. Từ giờ mọi thay đổi sẽ tự lưu thẳng vào file này trên USB.');
+        } catch (err) {
+            if (err && err.name !== 'AbortError') console.error(err);
+        }
+    }
+
+    function disconnectUsbFile() {
+        libraryFileHandle = null;
+        libraryFileName = '';
+        updateUsbStatus();
+    }
+
+    async function writeLibraryToHandle() {
+        if (!libraryFileHandle) return;
+        try {
+            const writable = await libraryFileHandle.createWritable();
+            const payload = { app: 'chu-ky-so', version: 1, exportedAt: new Date().toISOString(), items: library };
+            await writable.write(JSON.stringify(payload));
+            await writable.close();
+        } catch (err) {
+            // Có thể USB đã rút hoặc mất quyền -> vẫn còn cache localStorage, chỉ báo nhẹ, không chặn thao tác của người dùng
+            console.error('Không thể tự lưu vào file trên USB:', err);
+            if (usbStatusEl) usbStatusEl.textContent = '⚠️ Không ghi được vào "' + libraryFileName + '" (USB có thể đã rút). Hãy kết nối lại.';
+        }
+    }
+
+    // Lấy canvas chữ ký hiện tại (đã cắt viền cho text/draw) để lưu làm ảnh gốc trong thư viện
+    function getCurrentSignatureCanvas() {
+        let sourceCanvas;
+        switch (currentMode) {
+            case 'text': sourceCanvas = textCanvas; break;
+            case 'draw': sourceCanvas = drawCanvas; break;
+            case 'upload': sourceCanvas = processedCanvas; break;
+            default: return null;
+        }
+        if (!sourceCanvas) return null;
+
+        let workCanvas = sourceCanvas;
+        if (currentMode === 'text' || currentMode === 'draw') {
+            const ctx = sourceCanvas.getContext('2d');
+            const id = ctx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+            const trimmed = trimTransparent(id, 12);
+            if (trimmed.width < 2 || trimmed.height < 2) return null;
+            const c = document.createElement('canvas');
+            c.width = trimmed.width; c.height = trimmed.height;
+            c.getContext('2d').putImageData(trimmed, 0, 0);
+            workCanvas = c;
+        }
+        return workCanvas;
+    }
+
+    let lastUsedUnit = ''; // ghi nhớ đơn vị vừa lưu để điền sẵn cho lượt lưu kế tiếp (đỡ gõ lại khi làm liên tiếp nhiều người cùng đơn vị)
+
+    function openSaveLibraryModal() {
+        const canvas = getCurrentSignatureCanvas();
+        if (!canvas) {
+            alert('Chưa có chữ ký để lưu. Hãy tạo hoặc xử lý chữ ký trước khi lưu vào thư viện.');
+            return;
+        }
+        pendingSaveCanvas = canvas;
+        editInfoTargetId = null;
+
+        const linkedEntry = editingLibraryId ? library.find(e => e.id === editingLibraryId) : null;
+        if (linkedEntry) {
+            saveModalMode = 'update';
+            libUnitInput.value = linkedEntry.unit || '';
+            libNameInput.value = linkedEntry.name;
+            libNoteInput.value = linkedEntry.note || '';
+            saveModalTitle.textContent = '📚 Cập Nhật Chữ Ký';
+            saveModalSubtitle.textContent = 'Đang cập nhật bản ghi "' + linkedEntry.name + '" trong thư viện';
+            saveModalSubtitle.classList.remove('hidden');
+            saveAsNewLink.classList.remove('hidden');
+            saveLibraryConfirmBtn.textContent = 'Cập Nhật';
+        } else {
+            saveModalMode = 'new';
+            libUnitInput.value = lastUsedUnit;
+            libNameInput.value = '';
+            libNoteInput.value = '';
+            saveModalTitle.textContent = '📚 Lưu Vào Thư Viện';
+            saveModalSubtitle.classList.add('hidden');
+            saveAsNewLink.classList.add('hidden');
+            saveLibraryConfirmBtn.textContent = 'Lưu';
+        }
+
+        populateLibraryDatalists();
+        saveLibraryModal.classList.remove('hidden');
+        libUnitInput.focus();
+    }
+
+    function switchModalToNewMode() {
+        saveModalMode = 'new';
+        saveModalTitle.textContent = '📚 Lưu Vào Thư Viện';
+        saveModalSubtitle.classList.add('hidden');
+        saveAsNewLink.classList.add('hidden');
+        saveLibraryConfirmBtn.textContent = 'Lưu';
+        libUnitInput.focus();
+    }
+
+    // Mở modal chỉ để sửa đơn vị / tên / ghi chú của một bản ghi có sẵn, không đụng tới ảnh chữ ký
+    function openEditInfoModal(entry) {
+        pendingSaveCanvas = null;
+        editInfoTargetId = entry.id;
+        saveModalMode = 'editInfo';
+        libUnitInput.value = entry.unit || '';
+        libNameInput.value = entry.name;
+        libNoteInput.value = entry.note || '';
+        saveModalTitle.textContent = '📝 Sửa Thông Tin';
+        saveModalSubtitle.textContent = 'Chỉ đổi đơn vị / tên / ghi chú, ảnh chữ ký giữ nguyên';
+        saveModalSubtitle.classList.remove('hidden');
+        saveAsNewLink.classList.add('hidden');
+        saveLibraryConfirmBtn.textContent = 'Lưu Thay Đổi';
+        populateLibraryDatalists();
+        saveLibraryModal.classList.remove('hidden');
+        libUnitInput.focus();
+    }
+
+    function closeSaveLibraryModal() {
+        saveLibraryModal.classList.add('hidden');
+        pendingSaveCanvas = null;
+        editInfoTargetId = null;
+    }
+
+    function confirmSaveLibrary() {
+        const unit = libUnitInput.value.trim();
+        const name = libNameInput.value.trim();
+        if (!unit) { libUnitInput.focus(); return; }
+        if (!name) { libNameInput.focus(); return; }
+        const note = libNoteInput.value.trim();
+
+        if (saveModalMode === 'editInfo') {
+            const entry = library.find(e => e.id === editInfoTargetId);
+            if (entry) {
+                entry.unit = unit;
+                entry.name = name;
+                entry.note = note;
+                entry.updatedAt = new Date().toISOString();
+                persistLibrary();
+                renderLibrary();
+            }
+            lastUsedUnit = unit;
+            closeSaveLibraryModal();
+            return;
+        }
+
+        if (!pendingSaveCanvas) { closeSaveLibraryModal(); return; }
+        const dataUrl = pendingSaveCanvas.toDataURL('image/png');
+
+        if (saveModalMode === 'update' && editingLibraryId) {
+            const entry = library.find(e => e.id === editingLibraryId);
+            if (entry) {
+                entry.unit = unit;
+                entry.name = name;
+                entry.note = note;
+                entry.dataUrl = dataUrl;
+                entry.updatedAt = new Date().toISOString();
+            }
+        } else {
+            library.unshift({
+                id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+                unit: unit,
+                name: name,
+                note: note,
+                mode: currentMode,
+                dataUrl: dataUrl,
+                createdAt: new Date().toISOString()
+            });
+        }
+
+        persistLibrary();
+        editingLibraryId = null;
+        lastUsedUnit = unit;
+        closeSaveLibraryModal();
+        renderLibrary();
+    }
+
+    function deleteFromLibrary(id) {
+        library = library.filter(e => e.id !== id);
+        if (editingLibraryId === id) editingLibraryId = null;
+        persistLibrary();
+        renderLibrary();
+    }
+
+    // Nạp gợi ý tự động (datalist) từ các đơn vị / tên đã có trong thư viện, giúp gõ nhất quán,
+    // tránh tạo nhóm trùng chỉ vì gõ khác cách viết hoa/thường hoặc dấu cách.
+    function populateLibraryDatalists() {
+        const units = Array.from(new Set(library.map(e => (e.unit || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'vi'));
+        const names = Array.from(new Set(library.map(e => (e.name || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'vi'));
+        unitDatalist.innerHTML = units.map(u => '<option value="' + escapeHtml(u) + '">').join('');
+        nameDatalist.innerHTML = names.map(n => '<option value="' + escapeHtml(n) + '">').join('');
+    }
+
+    function clearLibrary() {
+        if (library.length === 0) return;
+        const ok = confirm(
+            'Xoá TOÀN BỘ ' + library.length + ' chữ ký trong thư viện trên máy này?\n' +
+            'Hành động này không thể hoàn tác, trừ khi bạn có file .json đã xuất trước đó để nhập lại.'
+        );
+        if (!ok) return;
+        library = [];
+        editingLibraryId = null;
+        persistLibrary();
+        renderLibrary();
+    }
+
+    function escapeHtml(str) {
+        const d = document.createElement('div');
+        d.textContent = str || '';
+        return d.innerHTML;
+    }
+
+    function formatLibraryDate(iso) {
+        try {
+            const d = new Date(iso);
+            return d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        } catch (e) { return ''; }
+    }
+
+    function renderLibrary() {
+        const q = librarySearchInput.value.trim().toLowerCase();
+        const filtered = library.filter(e =>
+            !q ||
+            e.name.toLowerCase().includes(q) ||
+            (e.unit || '').toLowerCase().includes(q) ||
+            (e.note || '').toLowerCase().includes(q)
+        );
+
+        if (library.length === 0) {
+            libraryEmptyEl.textContent = 'Chưa có chữ ký nào được lưu.';
+            libraryEmptyEl.classList.remove('hidden');
+        } else if (filtered.length === 0) {
+            libraryEmptyEl.textContent = 'Không tìm thấy chữ ký phù hợp.';
+            libraryEmptyEl.classList.remove('hidden');
+        } else {
+            libraryEmptyEl.classList.add('hidden');
+        }
+
+        libraryListEl.innerHTML = '';
+
+        // Nhóm theo cây: Đơn vị -> Tên người -> danh sách chữ ký (mỗi người có thể có nhiều bản)
+        const unitMap = new Map();
+        filtered.forEach(entry => {
+            const unit = (entry.unit || '').trim() || 'Chưa phân loại';
+            const name = (entry.name || '').trim() || 'Chưa đặt tên';
+            if (!unitMap.has(unit)) unitMap.set(unit, new Map());
+            const nameMap = unitMap.get(unit);
+            if (!nameMap.has(name)) nameMap.set(name, []);
+            nameMap.get(name).push(entry);
+        });
+
+        const units = Array.from(unitMap.keys()).sort((a, b) => a.localeCompare(b, 'vi'));
+        // Tự mở sẵn khi đang tìm kiếm hoặc thư viện còn nhỏ, để không phải bấm mở từng cấp
+        const autoExpand = !!q || library.length <= 8;
+
+        units.forEach(unit => {
+            const nameMap = unitMap.get(unit);
+            const names = Array.from(nameMap.keys()).sort((a, b) => a.localeCompare(b, 'vi'));
+            const unitSigCount = names.reduce((sum, n) => sum + nameMap.get(n).length, 0);
+
+            const unitDetails = document.createElement('details');
+            unitDetails.className = 'bg-white rounded-xl border border-gray-200 overflow-hidden';
+            if (autoExpand) unitDetails.open = true;
+
+            const unitSummary = document.createElement('summary');
+            unitSummary.className = 'cursor-pointer select-none px-4 py-3 font-bold text-gray-800 text-sm bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 flex items-center justify-between';
+            unitSummary.innerHTML =
+                '<span>🏢 ' + escapeHtml(unit) + '</span>' +
+                '<span class="text-[11px] font-normal text-gray-500">' + names.length + ' người · ' + unitSigCount + ' chữ ký</span>';
+            unitDetails.appendChild(unitSummary);
+
+            const unitBody = document.createElement('div');
+            unitBody.className = 'p-2.5 space-y-2 bg-gray-50';
+
+            names.forEach(name => {
+                const entries = nameMap.get(name).slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+                const personDetails = document.createElement('details');
+                personDetails.className = 'bg-white rounded-lg border border-gray-200 overflow-hidden';
+                if (autoExpand) personDetails.open = true;
+
+                const personSummary = document.createElement('summary');
+                personSummary.className = 'cursor-pointer select-none px-3 py-2 font-semibold text-gray-700 text-xs flex items-center justify-between hover:bg-gray-50';
+                personSummary.innerHTML =
+                    '<span>👤 ' + escapeHtml(name) + '</span>' +
+                    '<span class="text-[10px] font-normal text-gray-400">' + entries.length + ' chữ ký</span>';
+                personDetails.appendChild(personSummary);
+
+                const personGrid = document.createElement('div');
+                personGrid.className = 'grid sm:grid-cols-2 lg:grid-cols-3 gap-2 p-2';
+
+                entries.forEach(entry => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-gray-50 rounded-lg border border-gray-200 overflow-hidden';
+                    card.innerHTML =
+                        '<div class="result-canvas" style="height:90px; display:flex; align-items:center; justify-content:center;">' +
+                            '<img src="' + entry.dataUrl + '" alt="" style="max-height:75px; max-width:90%; object-fit:contain;">' +
+                        '</div>' +
+                        '<div class="p-2">' +
+                            '<p class="text-[11px] text-gray-500 truncate min-h-[14px]">' + escapeHtml(entry.note || '') + '</p>' +
+                            '<p class="text-[10px] text-gray-400">' + formatLibraryDate(entry.createdAt) + '</p>' +
+                            '<div class="grid grid-cols-2 gap-1 mt-1.5">' +
+                                '<button class="lib-download-btn text-[11px] py-1 rounded bg-emerald-500 text-white font-semibold hover:bg-emerald-600">⬇️ Tải</button>' +
+                                '<button class="lib-edit-btn text-[11px] py-1 rounded bg-indigo-500 text-white font-semibold hover:bg-indigo-600">✏️ Mở</button>' +
+                                '<button class="lib-editinfo-btn text-[11px] py-1 rounded bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200">📝 Sửa</button>' +
+                                '<button class="lib-delete-btn text-[11px] py-1 rounded bg-red-50 text-red-600 font-semibold hover:bg-red-100">🗑️ Xoá</button>' +
+                            '</div>' +
+                        '</div>';
+                    card.querySelector('.lib-download-btn').onclick = () => downloadLibraryEntry(entry);
+                    card.querySelector('.lib-edit-btn').onclick = () => loadEntryIntoEditor(entry);
+                    card.querySelector('.lib-editinfo-btn').onclick = () => openEditInfoModal(entry);
+                    card.querySelector('.lib-delete-btn').onclick = () => {
+                        if (confirm('Xoá chữ ký này của "' + name + '" khỏi thư viện?')) deleteFromLibrary(entry.id);
+                    };
+                    personGrid.appendChild(card);
+                });
+
+                personDetails.appendChild(personGrid);
+                unitBody.appendChild(personDetails);
+            });
+
+            unitDetails.appendChild(unitBody);
+            libraryListEl.appendChild(unitDetails);
+        });
+    }
+
+    // Mở lại một chữ ký đã lưu để chỉnh sửa (đổi màu, tải lại) trong tab Tải Ảnh.
+    // Ghi nhớ id bản ghi -> nếu sau đó bấm "Lưu Vào Thư Viện" sẽ CẬP NHẬT đúng bản ghi này thay vì tạo bản trùng.
+    function loadEntryIntoEditor(entry) {
+        const img = new Image();
+        img.onload = () => {
+            const c = document.createElement('canvas');
+            c.width = img.width; c.height = img.height;
+            c.getContext('2d').drawImage(img, 0, 0);
+            const id = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+
+            switchTab('upload');
+            document.getElementById('upload-initial-view').style.display = 'none';
+            document.getElementById('cropper-container').style.display = 'none';
+            if (cropper) { cropper.destroy(); cropper = null; }
+
+            history = []; historyIndex = -1;
+            saveToHistory(id);
+            displayResult(id);
+            document.getElementById('upload-color-container').classList.remove('hidden');
+            document.getElementById('download-options').classList.remove('hidden');
+
+            editingLibraryId = entry.id;
+        };
+        img.src = entry.dataUrl;
+    }
+
+    function downloadLibraryEntry(entry) {
+        const img = new Image();
+        img.onload = () => {
+            const c = document.createElement('canvas');
+            c.width = img.width; c.height = img.height;
+            c.getContext('2d').drawImage(img, 0, 0);
+
+            let finalCanvas = c;
+            const useWhiteBg = exportBackground === 'white' || exportFormat === 'jpg';
+            if (useWhiteBg) finalCanvas = compositeOnWhite(finalCanvas);
+
+            const isJpg = exportFormat === 'jpg';
+            const mime = isJpg ? 'image/jpeg' : 'image/png';
+            const ext = isJpg ? '.jpg' : '.png';
+            const safeName = (entry.name || 'chu-ky').replace(/[\\/:*?"<>|]/g, '').trim() || 'chu-ky';
+
+            const link = document.createElement('a');
+            link.download = safeName + ext;
+            link.href = isJpg ? finalCanvas.toDataURL(mime, 0.95) : finalCanvas.toDataURL(mime);
+            link.click();
+        };
+        img.src = entry.dataUrl;
+    }
+
+    // Xuất toàn bộ thư viện ra 1 file .json tự đủ (kèm ảnh base64) để mang theo USB
+    // Xuất thư viện: ưu tiên hộp thoại "Save As" gốc của hệ điều hành (cho chọn thẳng
+    // thư mục trên USB, chỉ hoạt động trên Chrome/Edge). Nếu trình duyệt không hỗ trợ
+    // (Firefox, Safari...) hoặc bị lỗi, tự động quay về cách tải xuống thông thường
+    // (vào thư mục Downloads mặc định) để đảm bảo luôn xuất được file.
+    async function exportLibraryJson() {
+        if (library.length === 0) {
+            alert('Thư viện đang trống, chưa có gì để xuất.');
+            return;
+        }
+        const payload = { app: 'chu-ky-so', version: 1, exportedAt: new Date().toISOString(), items: library };
+        const jsonStr = JSON.stringify(payload);
+        const suggestedName = 'thu-vien-chu-ky-' + new Date().toISOString().slice(0, 10) + '.json';
+
+        const canUsePicker = 'showSaveFilePicker' in window && (() => {
+            try { return window.self === window.top; } catch (e) { return false; }
+        })();
+
+        if (canUsePicker) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: suggestedName,
+                    types: [{ description: 'Thư viện chữ ký (JSON)', accept: { 'application/json': ['.json'] } }]
+                });
+                const writable = await handle.createWritable();
+                await writable.write(jsonStr);
+                await writable.close();
+                return; // đã lưu thành công đúng nơi người dùng chọn
+            } catch (err) {
+                if (err && err.name === 'AbortError') return; // người dùng bấm Huỷ trong hộp thoại -> không làm gì thêm
+                // Lỗi khác (vd trình duyệt chặn trên file://) -> rơi xuống cách tải xuống thường bên dưới
+            }
+        }
+
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = suggestedName;
+        link.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // Nhập thư viện từ file .json (gộp thêm, không xoá dữ liệu đang có, không trùng id)
+    function importLibraryJson(file) {
+        const reader = new FileReader();
+        reader.onload = ev => {
+            let parsed;
+            try {
+                parsed = JSON.parse(ev.target.result);
+            } catch (e) {
+                alert('File không hợp lệ hoặc bị lỗi định dạng JSON.');
+                return;
+            }
+            const items = Array.isArray(parsed) ? parsed : (parsed.items || []);
+            if (!Array.isArray(items)) {
+                alert('File không đúng định dạng thư viện chữ ký.');
+                return;
+            }
+            const added = mergeImportedItems(items);
+            persistLibrary();
+            renderLibrary();
+            alert('Đã nhập ' + added + ' chữ ký mới từ file vào thư viện.');
+        };
+        reader.readAsText(file);
+    }
+
+    init();
+    </script>
+</body>
+</html>
